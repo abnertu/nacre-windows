@@ -1,0 +1,14 @@
+{
+  "Sources": {
+    "Neovim": {
+      "Repo": "abnertu/orbit.nvim",
+      "Rev": "21bdf21500978cd5a4951641260257288b8b3ff0",
+      "Sha256": "0d046266d3e8c03bb1ea13783f2a91db5170014e83ace8c6fd7d28ec60706a25"
+    },
+    "WezTerm": {
+      "Repo": "Orbit-Lua/wezterm",
+      "Rev": "81ba4532bb2b074c41e18c3700ca8aeb96dae30e",
+      "Sha256": "cdb6fb1323d6c351925608db072150c208f10328c0d001424bb84d08db2ce49e"
+    }
+  }
+}

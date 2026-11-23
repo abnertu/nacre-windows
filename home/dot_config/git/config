@@ -1,0 +1,28 @@
+# nacre-windows Git baseline. Keep identity and credentials in ~/.gitconfig,
+# which Git reads after this file.
+[core]
+    quotePath = false
+    # Let .gitattributes decide line endings.
+    autocrlf = false
+    filemode = false
+    ignorecase = true
+    longpaths = true
+    symlinks = true
+    # Each repo, such as every lazy.nvim plugin, would start its own daemon.
+    # Enable it per large repo with `git config core.fsmonitor true`.
+    fsmonitor = false
+    editor = nvim
+[sequence]
+    editor = nvim
+[diff]
+    algorithm = histogram
+[fetch]
+    prune = true
+[init]
+    defaultBranch = main
+[merge]
+    conflictStyle = zdiff3
+[pull]
+    rebase = true
+[rebase]
+    autoStash = true
