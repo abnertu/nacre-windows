@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-25
+
+### Fixed
+
+- `upgrade self` and `install.ps1` keep WinGet on the console, so its progress bar, colors and non-ASCII text show correctly.
+- A declined WinGet configuration agreement ends `switch` with a one-line note and leaves no pending marker.
+
 ## [0.1.0] - 2026-11-24
 
 ### Added
@@ -23,5 +30,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `lock core`; run `upgrade self`.
 
-[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.0...HEAD
+[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.1...HEAD
+[0.1.1]: https://github.com/abnertu/nacre-windows/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/abnertu/nacre-windows/releases/tag/0.1.0
