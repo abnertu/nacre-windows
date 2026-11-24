@@ -5,6 +5,7 @@ function Test {
     param([string]$Name, [scriptblock]$Body)
     $full = "$($script:CurrentFile): $Name"
     if ($full -notlike $Filter) { return }
+
     try {
         & $Body
         $script:Passed++
@@ -34,9 +35,11 @@ function Assert-NoMatch {
 function New-TestRoot {
     $path = Join-Path $script:TempRoot ([guid]::NewGuid().ToString('N').Substring(0, 12))
     New-Item -ItemType Directory -Path $path | Out-Null
+
     foreach ($name in @('machine', 'state', 'home', 'bin')) {
         New-Item -ItemType Directory -Path (Join-Path $path $name) | Out-Null
     }
+
     # Fake native commands log their arguments. An exit code comes from
     # NW_FAKE_<COMMAND>_EXIT, or NW_FAKE_WINGET_TEST_EXIT for 'configure test'.
     $winget = @(
@@ -46,12 +49,14 @@ function New-TestRoot {
         'if defined NW_FAKE_WINGET_EXIT exit /b %NW_FAKE_WINGET_EXIT%'
         'exit /b 0'
     )
+
     $chezmoi = @(
         '@echo off'
         'echo chezmoi %*>>"%NW_FAKE_LOG%"'
         'if defined NW_FAKE_CHEZMOI_EXIT exit /b %NW_FAKE_CHEZMOI_EXIT%'
         'exit /b 0'
     )
+
     [System.IO.File]::WriteAllText((Join-Path $path 'bin\winget.cmd'), ($winget -join "`r`n") + "`r`n")
     [System.IO.File]::WriteAllText((Join-Path $path 'bin\chezmoi.cmd'), ($chezmoi -join "`r`n") + "`r`n")
     [System.IO.File]::WriteAllText((Join-Path $path 'log.txt'), '')
@@ -69,9 +74,11 @@ function New-TestMachine {
     param([string]$Settings = '', [hashtable]$HomeFiles = @{}, [string]$Lock)
     $root = New-TestRoot
     Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{`n    SchemaVersion = 1`n$Settings`n}`n"
+
     foreach ($relative in $HomeFiles.Keys) {
         Set-TestFile (Join-Path (Join-Path $root 'machine\home') $relative) $HomeFiles[$relative]
     }
+
     if ($Lock) { Set-TestFile (Join-Path $root 'machine\nacre-windows.lock.json') $Lock }
     return $root
 }
@@ -80,22 +87,27 @@ function New-TestMachine {
 # Returns @{ ExitCode; Output; Log }.
 function Invoke-TestScript {
     param([string]$Root, [string]$Script, [string[]]$Arguments = @(), [hashtable]$Environment = @{})
+
     $variables = @{
         NACRE_WINDOWS_STATE = (Join-Path $Root 'state')
         NACRE_WINDOWS_HOME  = (Join-Path $Root 'home')
         NW_FAKE_LOG         = (Join-Path $Root 'log.txt')
         Path                = (Join-Path $Root 'bin') + ';' + $env:Path
     }
+
     foreach ($key in $Environment.Keys) { $variables[$key] = $Environment[$key] }
     $saved = @{}
+
     foreach ($key in $variables.Keys) {
         $saved[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
         [Environment]::SetEnvironmentVariable($key, $variables[$key], 'Process')
     }
+
     # Windows PowerShell 5.1 turns redirected stderr into terminating errors
     # under Stop; the child's own exit code reports failure instead.
     $preference = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+
     try {
         $output = & $script:Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
         $code = $LASTEXITCODE
@@ -103,6 +115,7 @@ function Invoke-TestScript {
         $ErrorActionPreference = $preference
         foreach ($key in $saved.Keys) { [Environment]::SetEnvironmentVariable($key, $saved[$key], 'Process') }
     }
+
     return @{
         ExitCode = $code
         Output   = $output

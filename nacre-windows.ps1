@@ -36,6 +36,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $coreRoot = $PSScriptRoot
+
 foreach ($name in @('common', 'configuration', 'lock', 'build', 'deploy', 'doctor')) {
     . (Join-Path (Join-Path $coreRoot 'lib') "$name.ps1")
 }
@@ -44,12 +45,14 @@ if ($Command -eq 'help') {
     Get-Help $PSCommandPath -Detailed
     return
 }
+
 if ($Command -eq 'version') {
     Write-Output ([System.IO.File]::ReadAllText((Join-Path $coreRoot 'VERSION'))).Trim()
     return
 }
 
 $machineRoot = (Resolve-Path -LiteralPath $Machine).Path
+
 if ($Names.Count -gt 0 -and $Command -ne 'lock') {
     throw "'$Command' takes no names: $($Names -join ' ')."
 }
@@ -68,5 +71,6 @@ switch ($Command) {
         Lock-NwSourcePins -Config $config -LockPath (Join-Path $machineRoot $script:NwMachineLockName) -Names $Names -Rev $Rev
     }
 }
+
 # A tolerated native failure, such as a drift test, must not become the exit code.
 exit 0

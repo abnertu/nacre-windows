@@ -18,6 +18,7 @@ $script:Failed = @()
 . (Join-Path $PSScriptRoot 'test-helpers.ps1')
 
 New-Item -ItemType Directory -Path $script:TempRoot | Out-Null
+
 try {
     foreach ($file in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.tests.ps1' | Sort-Object Name) {
         $script:CurrentFile = $file.BaseName
@@ -30,8 +31,10 @@ try {
 $version = $PSVersionTable.PSVersion.ToString()
 Write-Host ''
 Write-Host "PowerShell $version`: $($script:Passed) passed, $($script:Failed.Count) failed."
+
 if ($script:Failed.Count -gt 0) {
     foreach ($name in $script:Failed) { Write-Host "  FAILED $name" }
     exit 1
 }
+
 exit 0

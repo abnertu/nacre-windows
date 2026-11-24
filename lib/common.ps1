@@ -19,6 +19,7 @@ function Get-NwHomeRoot {
 
 function New-NwDirectory {
     param([string]$Path)
+
     if (-not (Test-Path -LiteralPath $Path)) {
         New-Item -ItemType Directory -Force -Path $Path | Out-Null
     }
@@ -36,6 +37,7 @@ function Write-NwText {
 function Get-NwTextSha256 {
     param([string]$Text)
     $sha = [System.Security.Cryptography.SHA256]::Create()
+
     try {
         $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($Text)
         return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join '')
@@ -60,8 +62,10 @@ function ConvertTo-NwJsonString {
     param([string]$Text)
     $builder = New-Object System.Text.StringBuilder
     [void]$builder.Append('"')
+
     foreach ($char in $Text.ToCharArray()) {
         $code = [int]$char
+
         switch ($char) {
             '"' { [void]$builder.Append('\"'); continue }
             '\' { [void]$builder.Append('\\'); continue }
@@ -74,6 +78,7 @@ function ConvertTo-NwJsonString {
             }
         }
     }
+
     [void]$builder.Append('"')
     return $builder.ToString()
 }
@@ -86,28 +91,36 @@ function ConvertTo-NwJson {
     $pad = '  ' * $Depth
     $inner = '  ' * ($Depth + 1)
     if ($null -eq $Value) { return 'null' }
+
     if ($Value -is [bool]) {
         if ($Value) { return 'true' }
         return 'false'
     }
+
     if ($Value -is [string]) { return (ConvertTo-NwJsonString $Value) }
+
     if ($Value -is [int] -or $Value -is [long]) {
         return $Value.ToString([System.Globalization.CultureInfo]::InvariantCulture)
     }
+
     if ($Value -is [System.Collections.IDictionary]) {
         $keys = @(Get-NwSortedKeys $Value)
         if ($keys.Count -eq 0) { return '{}' }
+
         $items = foreach ($key in $keys) {
             $inner + (ConvertTo-NwJsonString $key) + ': ' + (ConvertTo-NwJson $Value[$key] ($Depth + 1))
         }
+
         return "{`n" + ($items -join ",`n") + "`n$pad}"
     }
+
     if ($Value -is [System.Collections.IEnumerable]) {
         $list = @($Value)
         if ($list.Count -eq 0) { return '[]' }
         $items = foreach ($item in $list) { $inner + (ConvertTo-NwJson $item ($Depth + 1)) }
         return "[`n" + ($items -join ",`n") + "`n$pad]"
     }
+
     throw "Cannot serialize a value of type $($Value.GetType().FullName)."
 }
 
@@ -115,16 +128,21 @@ function ConvertTo-NwJson {
 function ConvertTo-NwHashtable {
     param($Value)
     if ($null -eq $Value) { return $null }
+
     if ($Value -is [System.Management.Automation.PSCustomObject]) {
         $map = @{}
+
         foreach ($property in $Value.PSObject.Properties) {
             $map[$property.Name] = ConvertTo-NwHashtable $property.Value
         }
+
         return $map
     }
+
     if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string])) {
         return , @($Value | ForEach-Object { ConvertTo-NwHashtable $_ })
     }
+
     return $Value
 }
 
@@ -145,6 +163,7 @@ function Invoke-NwNative {
     param([string]$Command, [string[]]$Arguments, [switch]$AllowFailure)
     & $Command @Arguments
     $script:NwExitCode = $LASTEXITCODE
+
     if (-not $AllowFailure -and $script:NwExitCode -ne 0) {
         throw "'$Command $($Arguments -join ' ')' failed with exit code $($script:NwExitCode)."
     }
@@ -172,19 +191,23 @@ function Update-NwProcessPath {
     $known = @{}
     foreach ($entry in $current) { $known[$entry.TrimEnd('\').ToLowerInvariant()] = $true }
     $added = @()
+
     foreach ($scope in @('Machine', 'User')) {
         $raw = [Environment]::GetEnvironmentVariable('Path', $scope)
         if (-not $raw) { continue }
+
         foreach ($entry in $raw -split ';') {
             $expanded = [Environment]::ExpandEnvironmentVariables($entry.Trim())
             if (-not $expanded) { continue }
             $key = $expanded.TrimEnd('\').ToLowerInvariant()
+
             if (-not $known.ContainsKey($key)) {
                 $known[$key] = $true
                 $added += $expanded
             }
         }
     }
+
     $env:Path = (@($current) + $added) -join ';'
 }
 
@@ -195,6 +218,7 @@ function Save-NwGitHubArchive {
     $uri = Get-NwArchiveUrl -Repo $Repo -Rev $Rev
     $progress = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
+
     try {
         Invoke-WebRequest -UseBasicParsing -Uri $uri -OutFile $OutFile
     } finally {

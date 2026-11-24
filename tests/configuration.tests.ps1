@@ -7,6 +7,7 @@ Test 'machine settings override role defaults key by key' {
         'Notion.Notion' = `$true
     }
 "@
+
     $document = Read-TestText (Join-Path (Invoke-TestBuild $root) 'configuration.winget')
     Assert-NoMatch $document "id: 'Casey\.Just'" 'after the machine withdrew it'
     Assert-Match $document "id: 'Notion\.Notion'" 'after the machine added it'

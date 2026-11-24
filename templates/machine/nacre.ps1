@@ -20,12 +20,14 @@ $coreRepo = 'abnertu/nacre-windows'
 $override = $null
 $rev = $null
 $forward = @()
+
 for ($i = 0; $i -lt $args.Count; $i++) {
     if ($args[$i] -eq '-OverrideCore' -and $i + 1 -lt $args.Count) {
         $override = $args[$i + 1]
         $i++
         continue
     }
+
     if ($args[$i] -eq '-Rev' -and $i + 1 -lt $args.Count) { $rev = $args[$i + 1] }
     $forward += $args[$i]
 }
@@ -35,11 +37,13 @@ function Get-ArchiveSha256 {
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $progress = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
+
     try {
         Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$Repo/archive/$Rev.tar.gz" -OutFile $OutFile
     } finally {
         $ProgressPreference = $progress
     }
+
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $OutFile).Hash.ToLowerInvariant()
 }
 
@@ -63,9 +67,11 @@ if ($forward.Count -ge 2 -and $forward[0] -eq 'lock' -and $forward[1] -eq 'core'
 
     $lock = Read-Lock
     $sources = '{}'
+
     if ($null -ne $lock -and $lock.PSObject.Properties['Sources']) {
         $sources = ($lock.Sources | ConvertTo-Json -Depth 5)
     }
+
     $text = "{`n  `"Core`": {`n    `"Repo`": `"$coreRepo`",`n    `"Rev`": `"$commit`",`n    `"Sha256`": `"$sha`"`n  },`n  `"Sources`": " + ($sources -replace "`r`n", "`n" -replace "`n", "`n  ") + "`n}`n"
     [System.IO.File]::WriteAllText($lockPath, $text, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host "Core pinned to $commit."
@@ -73,21 +79,26 @@ if ($forward.Count -ge 2 -and $forward[0] -eq 'lock' -and $forward[1] -eq 'core'
 }
 
 $core = $override
+
 if (-not $core) {
     $lock = Read-Lock
+
     if ($null -eq $lock -or -not $lock.PSObject.Properties['Core']) {
         throw "No core pin in '$lockPath'. Run: .\nacre.ps1 lock core"
     }
+
     $pin = $lock.Core
     if ($pin.Rev -notmatch '^[0-9a-f]{40}$' -or $pin.Sha256 -notmatch '^[0-9a-f]{64}$') { throw "'$lockPath' has an invalid core pin." }
     $state = $env:NACRE_WINDOWS_STATE
     if (-not $state) { $state = Join-Path $env:LOCALAPPDATA 'nacre-windows' }
     $core = Join-Path (Join-Path $state 'core') $pin.Rev
+
     if (-not (Test-Path -LiteralPath (Join-Path $core 'nacre-windows.ps1'))) {
         $parent = Split-Path -Parent $core
         New-Item -ItemType Directory -Force -Path $parent | Out-Null
         $temporary = Join-Path $parent ($pin.Rev + '.tmp-' + [guid]::NewGuid().ToString('N'))
         New-Item -ItemType Directory -Path $temporary | Out-Null
+
         try {
             $archive = Join-Path $temporary 'core.tar.gz'
             $sha = Get-ArchiveSha256 -Repo $pin.Repo -Rev $pin.Rev -OutFile $archive

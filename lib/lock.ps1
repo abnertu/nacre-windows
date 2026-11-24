@@ -10,14 +10,18 @@ function Read-NwLock {
     $lock = Read-NwJson $Path
     if (-not ($lock -is [System.Collections.IDictionary])) { throw "'$Path' is not a JSON object." }
     if (-not $lock.ContainsKey('Sources') -or $null -eq $lock['Sources']) { $lock['Sources'] = @{} }
+
     foreach ($name in $lock['Sources'].Keys) {
         $pin = $lock['Sources'][$name]
-        $valid = $pin -is [System.Collections.IDictionary] -and
+
+        $valid = ($pin -is [System.Collections.IDictionary] -and
             [string]$pin['Repo'] -match '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' -and
             [string]$pin['Rev'] -match '^[0-9a-f]{40}$' -and
-            [string]$pin['Sha256'] -match '^[0-9a-f]{64}$'
+            [string]$pin['Sha256'] -match '^[0-9a-f]{64}$')
+
         if (-not $valid) { throw "'$Path' has an invalid pin for '$name'." }
     }
+
     return $lock
 }
 
@@ -26,20 +30,25 @@ function Resolve-NwSourcePins {
     $coreLock = Read-NwLock (Join-Path $CoreRoot 'sources.lock.json')
     $machineLock = Read-NwLock (Join-Path $MachineRoot $script:NwMachineLockName)
     $pins = @{}
+
     foreach ($name in (Get-NwSortedKeys $Config['Sources'])) {
         $source = $Config['Sources'][$name]
         if (-not $source['Enable'] -or $Names -notcontains $name) { continue }
         $pin = $null
+
         foreach ($lock in @($machineLock, $coreLock)) {
             if ($null -eq $pin -and $lock['Sources'].ContainsKey($name) -and $lock['Sources'][$name]['Repo'] -ieq $source['Repo']) {
                 $pin = $lock['Sources'][$name]
             }
         }
+
         if ($null -eq $pin) {
             throw "Source '$name' ($($source['Repo'])) has no pin. Run: nacre-windows lock $name"
         }
+
         $pins[$name] = @{ Repo = $pin['Repo']; Rev = $pin['Rev']; Sha256 = $pin['Sha256'] }
     }
+
     return $pins
 }
 
@@ -48,6 +57,7 @@ function Get-NwArchivePin {
     if (-not $Rev) { $Rev = Resolve-NwGitHubRev -Repo $Repo }
     if ($Rev -notmatch '^[0-9a-f]{40}$') { $Rev = Resolve-NwGitHubRev -Repo $Repo -Ref $Rev }
     $file = Join-Path ([System.IO.Path]::GetTempPath()) ('nacre-windows-' + [guid]::NewGuid().ToString('N') + '.tar.gz')
+
     try {
         Save-NwGitHubArchive -Repo $Repo -Rev $Rev -OutFile $file
         return @{ Repo = $Repo; Rev = $Rev; Sha256 = Get-NwFileSha256 $file }
@@ -64,6 +74,7 @@ function Lock-NwSourcePins {
     if (-not $Names -or $Names.Count -eq 0) { $Names = $enabled }
     if ($Rev -and $Names.Count -ne 1) { throw '-Rev needs exactly one source name.' }
     $lock = Read-NwLock $LockPath
+
     foreach ($name in $Names) {
         $match = @($enabled | Where-Object { $_ -ieq $name })
         if ($match.Count -ne 1) { throw "'$name' is not an enabled source. Enabled sources: $($enabled -join ', ')." }
@@ -73,11 +84,13 @@ function Lock-NwSourcePins {
         $previous = $null
         if ($lock['Sources'].ContainsKey($key)) { $previous = $lock['Sources'][$key]['Rev'] }
         $lock['Sources'][$key] = $pin
+
         if ($previous -eq $pin['Rev']) {
             Write-Host "$key is current at $($pin['Rev'])."
         } else {
             Write-Host "$key ($repo): $previous -> $($pin['Rev'])"
         }
     }
+
     Write-NwJson $LockPath $lock
 }
