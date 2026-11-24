@@ -27,6 +27,16 @@ Test 'upgrade system -Yes upgrades packages and skips prompts' {
     }
 }
 
+Test 'a declined WinGet agreement applies nothing and exits cleanly' {
+    $root = New-TestMachine -WithoutRoleModules
+    $result = Invoke-Nw -Root $root -Arguments @('switch') -Environment @{ NW_FAKE_WINGET_EXIT = '-1978286069' }
+    Assert-Success $result
+    Assert-Match $result.Output 'agreement was declined'
+    Assert-NoMatch $result.Log 'chezmoi apply'
+    Assert-True (-not (Test-Path (Join-Path $root 'state\pending.json'))) 'A declined switch kept the pending marker.'
+    Assert-True (-not (Test-Path (Join-Path $root 'state\current.json'))) 'A declined switch recorded an artifact.'
+}
+
 Test 'a failed package stage stops before the home stage and doctor reports it' {
     $root = New-TestMachine -WithoutRoleModules
     $result = Invoke-Nw -Root $root -Arguments @('switch') -Environment @{ NW_FAKE_WINGET_EXIT = '3' }

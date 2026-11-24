@@ -301,9 +301,11 @@ function Invoke-Core {
     $arguments = @{ Command = $CoreCommand; Machine = $machineDirectory }
     if ($CoreCommand -eq 'upgrade') { $arguments['Names'] = @('system') }
     if ($WithYes) { $arguments['Yes'] = $true }
-    # Out-Host keeps the core's output out of this function's return value.
-    & (Join-Path $Core 'nacre-windows.ps1') @arguments | Out-Host
-    return $LASTEXITCODE
+    # Never capture this call: WinGet then sees redirected output and drops
+    # its progress, colors and console encoding. The exit code goes through
+    # a script variable instead of the output.
+    & (Join-Path $Core 'nacre-windows.ps1') @arguments
+    $script:ExitCode = $LASTEXITCODE
 }
 
 function Invoke-UpgradeSelf {
@@ -382,8 +384,8 @@ function Invoke-UpgradeSelf {
     Write-Host "nacre-windows: $(Format-Revision $oldCommit $oldRef) -> $(Format-Revision $commit $label)"
 
     # -Yes for plan accepts only the WinGet agreement of its read-only test.
-    $code = Invoke-Core -Core $core -CoreCommand 'plan' -WithYes
-    if ($code -ne 0) { return $code }
+    Invoke-Core -Core $core -CoreCommand 'plan' -WithYes
+    if ($script:ExitCode -ne 0) { return }
 
     $apply = [bool]$Yes
 
@@ -395,13 +397,18 @@ function Invoke-UpgradeSelf {
 
     if (-not $apply) {
         Write-Host 'Not applied. Run: nacre switch'
-        return 0
+        $script:ExitCode = 0
+        return
     }
 
-    return (Invoke-Core -Core $core -CoreCommand 'switch' -WithYes)
+    Invoke-Core -Core $core -CoreCommand 'switch' -WithYes
 }
 
-if ($upgradeSelf) { exit (Invoke-UpgradeSelf) }
+if ($upgradeSelf) {
+    $script:ExitCode = 0
+    Invoke-UpgradeSelf
+    exit $script:ExitCode
+}
 
 $core = $OverrideCore
 

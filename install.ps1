@@ -137,8 +137,11 @@
         # The console host, also under the ISE: pwsh for 7, powershell.exe for 5.1.
         $shell = Join-Path $PSHOME 'powershell.exe'
         if ($PSVersionTable.PSEdition -eq 'Core') { $shell = (Get-Process -Id $PID).Path }
-        & $shell @arguments
-        if ($LASTEXITCODE -ne 0) { throw "upgrade self failed with exit code $LASTEXITCODE." }
+        # Start-Process keeps the wrapper on this console under `irm | iex`, so
+        # WinGet keeps its progress, colors and encoding.
+        $quoted = @($arguments | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } })
+        $process = Start-Process -FilePath $shell -ArgumentList $quoted -NoNewWindow -Wait -PassThru
+        if ($process.ExitCode -ne 0) { throw "upgrade self failed with exit code $($process.ExitCode)." }
         Write-Host "nacre-windows $tag is ready in $machine."
     } catch {
         Write-Error -ErrorRecord $_ -ErrorAction Continue

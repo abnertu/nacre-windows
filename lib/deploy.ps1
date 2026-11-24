@@ -2,6 +2,10 @@
 # The two stages share no rollback transaction.
 Set-StrictMode -Version Latest
 
+# WINGET_CONFIG_ERROR_WARNING_NOT_ACCEPTED (0x8A15C00B): the user declined the
+# configuration agreement or a warning.
+$script:NwWinGetAgreementDeclined = -1978286069
+
 function Get-NwChezmoiArguments {
     param([string]$ArtifactPath)
     $state = Get-NwStateRoot
@@ -229,7 +233,16 @@ function Invoke-NwDeployment {
     if ($Update) { $document = 'configuration-update.winget' }
     $arguments = @('configure', '-f', (Join-Path $build.Path $document))
     if ($Yes) { $arguments += '--accept-configuration-agreements' }
-    Invoke-NwNative -Command 'winget' -Arguments $arguments
+    Invoke-NwNative -Command 'winget' -Arguments $arguments -AllowFailure
+
+    if ($script:NwExitCode -eq $script:NwWinGetAgreementDeclined) {
+        # WinGet applied nothing; this switch did not start.
+        Remove-Item -LiteralPath $pending -Force
+        Write-Host 'Not applied: the WinGet configuration agreement was declined. Run switch again and accept it, or add -Yes.'
+        return
+    }
+
+    if ($script:NwExitCode -ne 0) { throw "'winget $($arguments -join ' ')' failed with exit code $($script:NwExitCode)." }
 
     Update-NwProcessPath
 
