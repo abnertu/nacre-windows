@@ -27,6 +27,15 @@ function Assert-Match {
     if ($Text -notmatch $Pattern) { throw "Expected /$Pattern/ $Message. Output:`n$Text" }
 }
 
+# An error message, which PowerShell wraps at the console width: 5.1 breaks
+# native error records, and 7 starts each wrapped line of an error view with
+# '|'. Compare without whitespace; keep '.*' out of the pattern.
+function Assert-ErrorMatch {
+    param([string]$Text, [string]$Pattern)
+    $flat = ($Text -replace '(?m)^\s*\|', '') -replace '\s+', ''
+    if ($flat -notmatch ($Pattern -replace ' ', '')) { throw "Expected the error /$Pattern/. Output:`n$Text" }
+}
+
 function Assert-NoMatch {
     param([string]$Text, [string]$Pattern, [string]$Message = '')
     if ($Text -match $Pattern) { throw "Did not expect /$Pattern/ $Message. Output:`n$Text" }
@@ -52,6 +61,10 @@ function New-TestRoot {
     # NW_FAKE_<COMMAND>_EXIT, or NW_FAKE_WINGET_TEST_EXIT for 'configure test'.
     $winget = @(
         '@echo off'
+        'if not "%1"=="--version" goto run'
+        'if defined NW_FAKE_WINGET_VERSION (echo %NW_FAKE_WINGET_VERSION%) else (echo v1.12.0)'
+        'exit /b 0'
+        ':run'
         'echo winget %*>>"%NW_FAKE_LOG%"'
         'if "%2"=="test" if defined NW_FAKE_WINGET_TEST_EXIT exit /b %NW_FAKE_WINGET_TEST_EXIT%'
         'if defined NW_FAKE_WINGET_EXIT exit /b %NW_FAKE_WINGET_EXIT%'
@@ -95,7 +108,7 @@ function New-TestMachine {
 # Run a script in a child process of this host with the test environment.
 # Returns @{ ExitCode; Output; Log }.
 function Invoke-TestScript {
-    param([string]$Root, [string]$Script, [string[]]$Arguments = @(), [hashtable]$Environment = @{}, [string[]]$InputText)
+    param([string]$Root, [string]$Script, [string[]]$Arguments = @(), [hashtable]$Environment = @{}, [string[]]$InputText, [switch]$Interactive)
 
     $variables = @{
         NACRE_WINDOWS_STATE = (Join-Path $Root 'state')
@@ -112,6 +125,9 @@ function Invoke-TestScript {
         [Environment]::SetEnvironmentVariable($key, $variables[$key], 'Process')
     }
 
+    $hostArguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass')
+    if (-not $Interactive) { $hostArguments += '-NonInteractive' }
+
     # Windows PowerShell 5.1 turns redirected stderr into terminating errors
     # under Stop; the child's own exit code reports failure instead.
     $preference = $ErrorActionPreference
@@ -120,9 +136,9 @@ function Invoke-TestScript {
     try {
         if ($PSBoundParameters.ContainsKey('InputText')) {
             # Piped lines become the child's stdin; an empty array is end of input.
-            $output = $InputText | & $script:Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
+            $output = $InputText | & $script:Shell @hostArguments -File $Script @Arguments 2>&1 | Out-String
         } else {
-            $output = & $script:Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
+            $output = & $script:Shell @hostArguments -File $Script @Arguments 2>&1 | Out-String
         }
 
         $code = $LASTEXITCODE
@@ -152,7 +168,7 @@ function Assert-Success {
 function Assert-Failure {
     param($Result, [string]$Pattern)
     if ($Result.ExitCode -eq 0) { throw "Expected a failure. Output:`n$($Result.Output)" }
-    Assert-Match $Result.Output $Pattern 'in the error output'
+    if ($Result.Output -notmatch $Pattern) { Assert-ErrorMatch $Result.Output $Pattern }
 }
 
 # Build and return the artifact directory.

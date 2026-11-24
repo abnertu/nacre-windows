@@ -86,7 +86,7 @@ Test 'ConfigHome moves every source target' {
     Assert-Match $external '\["cfg/wezterm"\]'
 }
 
-Test 'a pinned version and a hold are kept, and only other packages use the latest on update' {
+Test 'a pinned version and a hold are kept, and only other packages use the latest on upgrade system' {
     $root = New-TestMachine -Settings "    Packages = @{ 'Neovim.Neovim' = @{ Enable = `$true; Version = '0.11.5' }; 'sharkdp.fd' = @{ Enable = `$true; Hold = `$true } }"
     $artifact = Invoke-TestBuild $root
     $normal = Read-TestText (Join-Path $artifact 'configuration.winget')

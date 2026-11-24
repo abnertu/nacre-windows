@@ -50,9 +50,10 @@ if ($Command -eq 'lock' -and $Names.Count -gt 0 -and [string]::Equals($Names[0],
     throw "Usage: 'lock core' was removed. Run: .\nacre.ps1 upgrade self"
 }
 
-$machineRoot = $PSScriptRoot
-if ($MachineRoot) { $machineRoot = (Resolve-Path -LiteralPath $MachineRoot).Path }
-$lockPath = Join-Path $machineRoot 'nacre-windows.lock.json'
+# PowerShell names are case-insensitive, so this must not be named like -MachineRoot.
+$machineDirectory = $PSScriptRoot
+if ($MachineRoot) { $machineDirectory = (Resolve-Path -LiteralPath $MachineRoot).Path }
+$lockPath = Join-Path $machineDirectory 'nacre-windows.lock.json'
 $defaultRepo = 'abnertu/nacre-windows'
 # Tests point these at a local server.
 $apiBase = 'https://api.github.com'
@@ -277,26 +278,27 @@ function Test-BranchName {
 # A console that can answer: no -NonInteractive (any prefix from -noni) and
 # no redirected input. Tests force one with NACRE_WINDOWS_INTERACTIVE=1.
 function Test-Interactive {
-    if ($env:NACRE_WINDOWS_INTERACTIVE -eq '1') { return $true }
-    if (-not [Environment]::UserInteractive -or [Console]::IsInputRedirected) { return $false }
+    if (-not [Environment]::UserInteractive) { return $false }
 
     foreach ($argument in [Environment]::GetCommandLineArgs()) {
         if ($argument -match '^-noni(n(t(e(r(a(c(t(i(v(e)?)?)?)?)?)?)?)?)?)?$') { return $false }
     }
 
-    return $true
+    # Tests set NACRE_WINDOWS_INTERACTIVE=1 to read answers from redirected input.
+    return ($env:NACRE_WINDOWS_INTERACTIVE -eq '1' -or -not [Console]::IsInputRedirected)
 }
 
 function Format-Revision {
     param([string]$Commit, [string]$Label)
     if (-not $Commit) { return 'no pin' }
-    if ($Label) { return "$($Commit.Substring(0, 12)) ($Label)" }
-    return $Commit.Substring(0, 12)
+    $short = $Commit.Substring(0, [Math]::Min(12, $Commit.Length))
+    if ($Label) { return "$short ($Label)" }
+    return $short
 }
 
 function Invoke-Core {
     param([string]$Core, [string]$CoreCommand, [switch]$WithYes)
-    $arguments = @{ Command = $CoreCommand; Machine = $machineRoot }
+    $arguments = @{ Command = $CoreCommand; Machine = $machineDirectory }
     if ($CoreCommand -eq 'upgrade') { $arguments['Names'] = @('system') }
     if ($WithYes) { $arguments['Yes'] = $true }
     # Out-Host keeps the core's output out of this function's return value.
@@ -307,6 +309,7 @@ function Invoke-Core {
 function Invoke-UpgradeSelf {
     if ($Names.Count -ne 1) { throw "Usage: upgrade self takes no names: $($Names[1..($Names.Count - 1)] -join ' ')." }
     if ($OverrideCore) { throw 'Usage: upgrade self pins a published core; -OverrideCore only previews a local core.' }
+    if ($Version) { throw 'Usage: upgrade self takes -Rev, -Ref or -Release, not -Version.' }
     if ($Ref -and $Release) { throw 'Usage: give -Ref <branch> or -Release, not both.' }
     if ($Rev -and $Rev -notmatch '^[0-9a-f]{40}$') { throw "-Rev must be a full 40-character commit, not '$Rev'." }
     if ($Ref -and -not (Test-BranchName $Ref)) { throw "-Ref '$Ref' is not a valid branch name." }
@@ -343,12 +346,12 @@ function Invoke-UpgradeSelf {
         $commit = [string](Invoke-GitHubJson "repos/$repo/commits/$(ConvertTo-UrlPath $tag)").sha
         $label = $tag
 
-        if (-not $explicit -and $null -ne $current) {
+        if (-not $explicit -and $null -ne $current -and $current.Rev -ne $commit) {
             $comparison = Invoke-GitHubJson "repos/$repo/compare/$(ConvertTo-UrlPath $tag)...$($current.Rev)" -AllowMissing
             if ($null -eq $comparison) { throw "The pinned commit $($current.Rev) was not found in $repo. Run: .\nacre.ps1 upgrade self -Release" }
 
             if (@('ahead', 'diverged') -contains [string]$comparison.status) {
-                throw "The pinned commit $($current.Rev) is not behind the newest release $tag (GitHub: $($comparison.status)). Run '.\nacre.ps1 upgrade self -Ref main' to follow main, or '.\nacre.ps1 upgrade self -Release' to pin $tag."
+                throw "The pinned commit $($current.Rev) is not behind the newest release $tag at $commit (GitHub: $($comparison.status)). Run '.\nacre.ps1 upgrade self -Ref main' to follow main, or '.\nacre.ps1 upgrade self -Release' to pin $tag."
             }
         }
     }
@@ -411,7 +414,7 @@ if (-not $core) {
     throw "'$core' is not a nacre-windows checkout."
 }
 
-$forward = @{ Machine = $machineRoot }
+$forward = @{ Machine = $machineDirectory }
 
 foreach ($key in $PSBoundParameters.Keys) {
     if ($key -ne 'OverrideCore') { $forward[$key] = $PSBoundParameters[$key] }

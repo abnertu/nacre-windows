@@ -8,10 +8,11 @@ function Invoke-TestProfile {
     New-Item -ItemType Directory -Force -Path $elsewhere | Out-Null
 
     $lines = @(
-        "`$ErrorActionPreference = 'Continue'"
         ". '$profilePath'"
         "Set-Location -LiteralPath '$elsewhere'"
-        'nacre plan extra -Yes'
+        # A caught error prints its whole message on one line.
+        "`$ErrorActionPreference = 'Stop'"
+        'try { nacre plan extra -Yes } catch { Write-Output "error=$($_.Exception.Message)" }'
         'Write-Output "code=$LASTEXITCODE"'
     )
 
@@ -53,6 +54,6 @@ Test 'the nacre function runs the machine wrapper' {
 
     $root = New-TestRoot
     $result = Invoke-TestProfile -Root $root
-    Assert-Match $result.Output 'No nacre-windows machine in'
-    Assert-Match $result.Output ([regex]::Escape((Join-Path $root 'home\.config\nacre\windows')))
+    $checkout = Join-Path $root 'home\.config\nacre'
+    Assert-Match $result.Output ("error=No nacre-windows machine in '" + [regex]::Escape($checkout) + "' or '" + [regex]::Escape((Join-Path $checkout 'windows')) + "'")
 }

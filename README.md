@@ -14,10 +14,29 @@ Requirements:
 
 - Windows 10 1809 or later, or Windows 11.
 - [WinGet](https://github.com/microsoft/winget-cli) 1.11 or later.
+- [Git](https://git-scm.com/).
 
 Each role installs [chezmoi](https://www.chezmoi.io/).
 
-To start a machine repository:
+Read [the install script](install.ps1). Then run it, also to upgrade:
+
+```powershell
+irm https://github.com/abnertu/nacre-windows/releases/latest/download/install.ps1 | iex
+```
+
+| Checkout (`NACRE_DIR`, else `~/.config/nacre`) | Action |
+| --- | --- |
+| Holds `machine.psd1`, at its root or in `windows/` | Runs `upgrade self` for that machine. |
+| Absent or empty, `NACRE_REPO` set | Clones `NACRE_REPO`, then runs `upgrade self`. |
+| Absent or empty | Creates a machine repository from the release's template, then runs `upgrade self`. |
+
+The script runs the newest release's template wrapper, so an old machine wrapper does not stop the upgrade. It warns when the machine's `nacre.ps1` differs from that template. Set `NACRE_YES=1` to switch without a question. Set up the credentials for a private `NACRE_REPO` first:
+
+```powershell
+$env:NACRE_REPO = 'git@github.com:you/machines.git'; irm https://github.com/abnertu/nacre-windows/releases/latest/download/install.ps1 | iex
+```
+
+To start a machine repository by hand:
 
 1. Copy `templates/machine` into a Git repository.
 2. Edit `machine.psd1`. Remove each setting that you keep at its default.

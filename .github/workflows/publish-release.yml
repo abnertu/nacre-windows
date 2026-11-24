@@ -1,0 +1,55 @@
+name: Publish Release
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish_release:
+    name: Verify Tag and Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check Out Release History
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify the Tag Is on main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error title=release::tag $GITHUB_REF_NAME is not on main"
+            exit 1
+          }
+      - name: Verify the Tag Matches VERSION
+        run: |
+          [[ $GITHUB_REF_NAME =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error title=release::tag $GITHUB_REF_NAME is not a version"
+            exit 1
+          }
+          [[ $GITHUB_REF_NAME == "$(cat VERSION)" ]] || {
+            echo "::error title=release::tag $GITHUB_REF_NAME does not match VERSION $(cat VERSION)"
+            exit 1
+          }
+      - name: Write Release Notes
+        run: |
+          # This version's changelog section, up to the next version heading.
+          awk -v v="## [$GITHUB_REF_NAME]" 'index($0, v) == 1 {on=1; next} /^## \[/{on=0} on' CHANGELOG.md >"$RUNNER_TEMP/notes.md"
+          [[ -s $RUNNER_TEMP/notes.md ]] || {
+            echo "::error title=release::CHANGELOG.md has no section for $GITHUB_REF_NAME"
+            exit 1
+          }
+      - name: Create the Release with install.ps1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # releases/latest/download/install.ps1 serves this asset; a
+        # prerelease never becomes releases/latest.
+        run: |
+          prerelease=()
+          [[ $GITHUB_REF_NAME != *-* ]] || prerelease=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" install.ps1 --title "nacre-windows $GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${prerelease[@]}"

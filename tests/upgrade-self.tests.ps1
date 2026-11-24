@@ -1,5 +1,6 @@
 # upgrade self through the machine wrapper, against a local GitHub stand-in.
 
+$script:UpgradeArchive = $null
 $script:UpgradeRepo = 'abnertu/nacre-windows'
 $script:OldRev = 'a' * 40
 $script:ReleaseRev = 'c' * 40
@@ -48,14 +49,6 @@ function Invoke-Upgrade {
     if (-not $Script) { $Script = $Fixture.Wrapper }
     $call = @{ Root = $Fixture.Root; Script = $Script; Arguments = $Arguments; Environment = $variables }
     return (Invoke-TestScript @call)
-}
-
-function Invoke-UpgradeWithInput {
-    param($Fixture, [string[]]$Arguments, [hashtable]$Environment, [string[]]$InputText)
-    $variables = @{}
-    foreach ($key in $Fixture.Web.Environment.Keys) { $variables[$key] = $Fixture.Web.Environment[$key] }
-    foreach ($key in $Environment.Keys) { $variables[$key] = $Environment[$key] }
-    return (Invoke-TestScript -Root $Fixture.Root -Script $Fixture.Wrapper -Arguments $Arguments -Environment $variables -InputText $InputText)
 }
 
 function Read-UpgradeLock {
@@ -152,6 +145,7 @@ Test 'upgrade self pins one commit' {
         @{ Lock = (Get-UpgradeLock -Ref 'main'); Arguments = @(); Ref = 'main' }
         @{ Lock = (Get-UpgradeLock); Arguments = @('-Ref', 'main'); Ref = 'main' }
         @{ Lock = (Get-UpgradeLock -Ref 'main'); Arguments = @('-Release'); Ref = '' }
+        @{ Lock = (Get-UpgradeLock -Rev 'abc'); Arguments = @(); Ref = '' }
     )
 
     foreach ($case in $cases) {
@@ -175,7 +169,7 @@ Test 'upgrade self pins one commit' {
 
 Test 'upgrade self refuses a downgrade' {
     $cases = @(
-        @{ Status = '{"status":"ahead"}'; Pattern = 'is not behind the newest release 0\.2\.0 \(GitHub: ahead\).*-Ref main.*-Release' }
+        @{ Status = '{"status":"ahead"}'; Pattern = 'is not behind the newest release 0\.2\.0 at c{40} \(GitHub: ahead\).*-Ref main.*-Release' }
         @{ Status = '{"status":"diverged"}'; Pattern = '\(GitHub: diverged\)' }
         @{ Status = $null; Pattern = 'was not found' }
         @{ Status = 'no-release'; Pattern = 'has no release yet.*-Ref <branch>' }
@@ -242,35 +236,38 @@ Test 'upgrade self verifies the cached core' {
     }
 }
 
+function Invoke-UpgradeAnswer {
+    param($Fixture, [hashtable]$Environment, [string[]]$InputText, [switch]$Interactive)
+    $variables = @{}
+    foreach ($key in $Fixture.Web.Environment.Keys) { $variables[$key] = $Fixture.Web.Environment[$key] }
+    foreach ($key in $Environment.Keys) { $variables[$key] = $Environment[$key] }
+    return (Invoke-TestScript -Root $Fixture.Root -Script $Fixture.Wrapper -Arguments @('upgrade', 'self') -Environment $variables -InputText $InputText -Interactive:$Interactive)
+}
+
 Test 'upgrade self asks before switch' {
+    # Each case differs from the accepted one in one rule only.
+    $seam = @{ NACRE_WINDOWS_INTERACTIVE = '1' }
+
     $cases = @(
-        @{ Environment = @{ NACRE_WINDOWS_INTERACTIVE = '1' }; InputText = @('n') }
-        @{ Environment = @{ NACRE_WINDOWS_INTERACTIVE = '1' }; InputText = @() }
-        @{ Environment = @{}; InputText = @() }
+        @{ Name = 'accepted'; Environment = $seam; InputText = @('y'); Interactive = $true; Switches = $true }
+        @{ Name = 'declined'; Environment = $seam; InputText = @('n'); Interactive = $true; Switches = $false }
+        @{ Name = 'end of input'; Environment = $seam; InputText = @(); Interactive = $true; Switches = $false }
+        @{ Name = 'redirected input'; Environment = @{}; InputText = @('y'); Interactive = $true; Switches = $false }
+        @{ Name = '-NonInteractive host'; Environment = $seam; InputText = @('y'); Interactive = $false; Switches = $false }
     )
 
     foreach ($case in $cases) {
         $fixture = New-UpgradeFixture -Lock (Get-UpgradeLock)
 
         try {
-            $result = Invoke-UpgradeWithInput $fixture @('upgrade', 'self') $case.Environment $case.InputText
+            $result = Invoke-UpgradeAnswer $fixture $case.Environment $case.InputText -Interactive:$case.Interactive
             Assert-Success $result
-            Assert-True ((Read-UpgradeLock $fixture).Core.Rev -eq $script:ReleaseRev) 'The new pin was not written.'
-            Assert-Deployed $result -WithoutSwitch
-            Assert-Match $result.Output 'Run: nacre switch'
+            Assert-True ((Read-UpgradeLock $fixture).Core.Rev -eq $script:ReleaseRev) "$($case.Name): the new pin was not written."
+            Assert-Deployed $result -WithoutSwitch:(-not $case.Switches)
+            if (-not $case.Switches) { Assert-Match $result.Output 'Run: nacre switch' }
         } finally {
             Stop-TestWeb $fixture.Web
         }
-    }
-
-    $fixture = New-UpgradeFixture -Lock (Get-UpgradeLock)
-
-    try {
-        $result = Invoke-UpgradeWithInput $fixture @('upgrade', 'self') @{ NACRE_WINDOWS_INTERACTIVE = '1' } @('y')
-        Assert-Success $result
-        Assert-Deployed $result
-    } finally {
-        Stop-TestWeb $fixture.Web
     }
 }
 
@@ -346,6 +343,7 @@ Test 'upgrade self runs for another machine and rejects misplaced options' {
             @{ Arguments = @('lock', 'core'); Pattern = "'lock core' was removed" }
             @{ Arguments = @('upgrade', 'self', 'extra'); Pattern = 'takes no names' }
             @{ Arguments = @('upgrade', 'self', '-OverrideCore', $script:CoreRoot); Pattern = 'only previews a local core' }
+            @{ Arguments = @('upgrade', 'self', '-Version', '1.0'); Pattern = 'not -Version' }
         )
 
         foreach ($case in $misplaced) {

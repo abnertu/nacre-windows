@@ -20,8 +20,10 @@ Test 'upgrade system -Yes upgrades packages and skips prompts' {
     Assert-Match $result.Log 'configuration-update\.winget --accept-configuration-agreements'
     Assert-NoMatch $result.Log '--interactive'
 
-    foreach ($arguments in @(@('update'), @('upgrade'), @('upgrade', 'everything'))) {
-        Assert-Failure (Invoke-Nw -Root $root -Arguments $arguments) ''
+    Assert-Failure (Invoke-Nw -Root $root -Arguments @('update')) 'does not belong to the set'
+
+    foreach ($arguments in @(@('upgrade'), @('upgrade', 'everything'))) {
+        Assert-Failure (Invoke-Nw -Root $root -Arguments $arguments) 'Usage: upgrade system'
     }
 }
 

@@ -181,7 +181,7 @@ function Get-NwRoleChain {
 
 # A module name becomes a directory name under each module root. Windows
 # strips a trailing dot and cannot make a device name, and the machine
-# wrapper rejects 'lock core', which once pinned the core.
+# machine wrapper reserves the name 'core'.
 function Test-NwModuleName {
     param([string]$Name)
     if ($Name -cnotmatch '^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?\z' -or $Name.Contains('..')) { return $false }
