@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-25
+
+### Changed
+
+- `plan` and `doctor` compare the declared packages with one `winget export` instead of a WinGet DSC test per package, which is much faster. They no longer ask for the configuration agreement.
+- `install.ps1` runs the release wrapper in its own process, as the `nacre` function does, so WinGet draws its progress bar correctly. A process that blocks script files still uses a `RemoteSigned` child process.
+
 ## [0.1.1] - 2026-11-25
 
 ### Fixed
@@ -30,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `lock core`; run `upgrade self`.
 
-[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.1...HEAD
+[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.2...HEAD
+[0.1.2]: https://github.com/abnertu/nacre-windows/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/abnertu/nacre-windows/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/abnertu/nacre-windows/releases/tag/0.1.0
