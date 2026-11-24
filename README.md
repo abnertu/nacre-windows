@@ -50,14 +50,14 @@ Preview the changes, then apply them:
 | `build` | Evaluates the machine and prints the artifact path. |
 | `plan` | Builds, then shows package drift, module installs and home changes. Changes nothing. |
 | `switch` | Builds, then applies packages, modules and home files. |
-| `update` | Does a `switch` and also upgrades each package without `Version` or `Hold`. |
+| `upgrade system` | Does a `switch` and also upgrades each package without `Version` or `Hold`. |
 | `doctor` | Reports drift and conflicts. Changes nothing. |
 | `lock [<Name>...]` | Pins sources and modules. A source gets the newest commit of its default branch. A module gets the newest stable Gallery version. |
 | `lock <Source> -Rev <commit>` | Pins one source to a commit. |
 | `lock <Module> -Version <version>` | Pins one module to a Gallery version. |
 | `lock core` | Pins the core and keeps the other pins. Only the machine wrapper runs it. |
 
-`-Yes` accepts the WinGet configuration agreement, which each command asks for. In `switch` and `update`, it also applies home files without prompts.
+`-Yes` accepts the WinGet configuration agreement, which each command asks for. In `switch` and `upgrade system`, it also applies home files without prompts.
 To preview core changes, add `-OverrideCore <path>` with a core checkout. Then publish the changes and run `lock core`.
 
 `plan` and `doctor` run `winget configure test`. Its first run can install the WinGet DSC processor.
@@ -73,7 +73,7 @@ Load order does not set precedence.
 | `SchemaVersion` | required | Must be `1`. |
 | `Role` | `workstation` | `minimal` has the core, shell and development tools. `workstation` adds WezTerm. |
 | `ConfigHome` | `.config` | Home-relative config root. `switch` declares it as `XDG_CONFIG_HOME`. |
-| `Packages` | from the role | `'<WinGet id>' = $true`, `$false`, or `@{ Enable; Version; Hold; Source }`. `Hold` keeps an installed version during `update`. |
+| `Packages` | from the role | `'<WinGet id>' = $true`, `$false`, or `@{ Enable; Version; Hold; Source }`. `Hold` keeps an installed version during `upgrade system`. |
 | `Files` | all core files | `'<target>' = $false` withdraws a core home file. |
 | `Sources` | from the role | Pinned config directories: `@{ Enable; Repo; Target }`. |
 | `Development` | none | `'<Source>' = '<absolute path>'` links a local worktree instead of the pin. |
@@ -85,10 +85,11 @@ Load order does not set precedence.
 
 ### Home files
 
-The core owns `home/`. The machine owns its own `home/`. Both use chezmoi source names.
+The core owns `files/home/`. The machine owns its own `files/`. Both hold each file under its target name, such as `files/.config/starship.toml` for `~/.config/starship.toml`. Build gives each file its chezmoi source name.
 
 - Each target has one owner. To replace a core file, withdraw it in `Files` and add your file.
-- Declare static files only. nacre-windows rejects scripts, templates, symlinks, removals and encrypted files.
+- Declare static files only. A name that looks like a chezmoi attribute, such as `run_x` or `x.tmpl`, stays a literal file name. nacre-windows rejects links and `.chezmoi*` files.
+- A machine `home/` directory is an error. Move its files to `files/` under their target names.
 - A home file cannot be inside a source directory.
 - Put personal PowerShell code in `.config/powershell/profile.d/*.ps1`. The core profile loads it.
 
@@ -97,6 +98,8 @@ Add this line to `$PROFILE.CurrentUserCurrentHost` of each PowerShell host:
 ```powershell
 . (Join-Path $HOME '.config/powershell/profile.ps1')
 ```
+
+The core profile defines a `nacre` function. It runs the machine's `nacre.ps1` from any directory. It finds the checkout in `NACRE_DIR`, else `~/.config/nacre`. The machine is that checkout or its `windows/` subdirectory, whichever holds `machine.psd1`.
 
 ### Sources
 
@@ -185,7 +188,7 @@ Each task has one owner:
 ## Limits
 
 - WinGet installers are not content-addressed. Pin a `Version` where you need a fixed release.
-- `switch` ensures package presence. Only `update` upgrades.
+- `switch` ensures package presence. Only `upgrade system` upgrades.
 - Sources come from GitHub only.
 - Disabling a declaration withdraws management only. Existing packages and module versions stay.
 - The package, module and home stages run separately. A failure leaves earlier changes in place.

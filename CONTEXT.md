@@ -7,7 +7,7 @@ nacre-windows evaluates machine policy into a fixed artifact. `switch` converges
 | Public policy | `defaults.psd1`, `lib/configuration.ps1` | Settings, types and defaults |
 | Role | `roles/` | `minimal` and `workstation` baselines; `workstation` extends `minimal` |
 | Machine | A separate repository based on `templates/machine/` | Role, overrides, personal home files and pins |
-| Packages | WinGet DSC v3 | Presence, optional versions, holds and upgrades with `update` |
+| Packages | WinGet DSC v3 | Presence, optional versions, holds and upgrades with `upgrade system` |
 | Home | chezmoi | Static files and pinned source archives |
 | Gallery modules | nacre-windows | CurrentUser module versions and staging directories |
 | Development links | nacre-windows | Junctions from source targets to local worktrees |

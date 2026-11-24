@@ -104,7 +104,7 @@
 ## Code
 
 - Support Windows PowerShell 5.1 and PowerShell 7. A new Windows host has only 5.1.
-- Name files in lowercase kebab-case, such as `run-tests.ps1`. Keep chezmoi source attributes, such as `dot_`, and reserved tool filenames.
+- Name files in lowercase kebab-case, such as `run-tests.ps1`. Keep home files under `files/home/` at their target names, and keep reserved tool filenames.
 - Format PowerShell files with `scripts/format.ps1`. It needs PSScriptAnalyzer 1.25.0.
 - Edit formatter rules in `PSScriptAnalyzerSettings.psd1`. Edit blank-line rules in `scripts/format.ps1`.
 - Keep each `.ps1` and `.psd1` file ASCII with LF line endings. Windows PowerShell 5.1 reads a BOM-less script as the ANSI code page.

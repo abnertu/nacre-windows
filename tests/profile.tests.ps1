@@ -6,6 +6,7 @@ function Invoke-TestProfile {
     $profilePath = Join-Path $script:CoreRoot 'files\home\.config\powershell\profile.ps1'
     $elsewhere = Join-Path $Root 'elsewhere'
     New-Item -ItemType Directory -Force -Path $elsewhere | Out-Null
+
     $lines = @(
         "`$ErrorActionPreference = 'Continue'"
         ". '$profilePath'"
@@ -13,6 +14,7 @@ function Invoke-TestProfile {
         'nacre plan extra -Yes'
         'Write-Output "code=$LASTEXITCODE"'
     )
+
     Set-TestFile $driver ($lines -join "`n")
     return Invoke-TestScript -Root $Root -Script $driver -Environment $Environment
 }
@@ -21,11 +23,13 @@ function New-TestCheckout {
     param([string]$Machine)
     New-Item -ItemType Directory -Force -Path $Machine | Out-Null
     Set-TestFile (Join-Path $Machine 'machine.psd1') "@{ SchemaVersion = 1 }`n"
+
     $lines = @(
         'param([Parameter(Position = 0)][string]$Command, [Parameter(Position = 1, ValueFromRemainingArguments = $true)][string[]]$Names, [switch]$Yes)'
         'Write-Output "wrapper $Command $($Names -join ",") yes=$Yes at $PSScriptRoot"'
         'exit 7'
     )
+
     Set-TestFile (Join-Path $Machine 'nacre.ps1') ($lines -join "`n")
 }
 

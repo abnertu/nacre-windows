@@ -56,7 +56,7 @@ Test 'plan -Yes accepts the agreement that a WinGet test asks for' {
 Test 'doctor reports a configuration that changed after the last switch' {
     $root = New-TestMachine -WithoutRoleModules
     Assert-Success (Invoke-Nw -Root $root -Arguments @('switch', '-Yes'))
-    Set-TestFile (Join-Path $root 'machine\home\dot_vimrc') "set number`n"
+    Set-TestFile (Join-Path $root 'machine\files\.vimrc') "set number`n"
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('doctor')) 'configuration changed since the last switch'
 }
 

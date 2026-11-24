@@ -1,18 +1,18 @@
 # Artifact content, identity and ownership rules.
 
 Test 'equal inputs give one artifact and a changed input gives another' {
-    $root = New-TestMachine -HomeFiles @{ 'dot_vimrc' = "set number`n" }
+    $root = New-TestMachine -HomeFiles @{ '.vimrc' = "set number`n" }
     $first = Invoke-TestBuild $root
     $second = Invoke-TestBuild $root
     Assert-True ($first -eq $second) "Two builds of one input differ: $first, $second."
-    Set-TestFile (Join-Path $root 'machine\home\dot_vimrc') "set relativenumber`n"
+    Set-TestFile (Join-Path $root 'machine\files\.vimrc') "set relativenumber`n"
     $third = Invoke-TestBuild $root
     Assert-True ($third -ne $first) 'A changed home file kept the artifact identifier.'
     Assert-Match (Read-TestText (Join-Path $third 'home\dot_vimrc')) 'relativenumber'
 }
 
 Test 'a machine file takes over a core file only after the core file is withdrawn' {
-    $files = @{ 'dot_config/git/config' = "[user]`n    name = test`n" }
+    $files = @{ '.config/git/config' = "[user]`n    name = test`n" }
     $root = New-TestMachine -HomeFiles $files
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) "'\.config/git/config' has two owners"
 
@@ -26,15 +26,42 @@ Test 'withdrawing a file that the core does not have fails' {
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) "names no core file"
 }
 
-Test 'host-dependent chezmoi features are rejected' {
-    foreach ($name in @('run_once_setup.ps1', 'dot_gitconfig.tmpl', 'symlink_dot_x', '.hidden')) {
-        $root = New-TestMachine -HomeFiles @{ $name = "x`n" }
-        Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) ([regex]::Escape($name))
+Test 'target names that look like chezmoi attributes stay literal' {
+    $root = New-TestMachine -HomeFiles @{
+        '.config/x' = "x`n"
+        'private_y' = "y`n"
+        'z'         = ''
+        'run_w'     = ''
+        'd.tmpl/f'  = "f`n"
+        'g.tmpl'    = "g`n"
+    }
+
+    $artifact = Invoke-TestBuild $root
+
+    $sources = @(Get-ChildItem -LiteralPath (Join-Path $artifact 'home') -Recurse -File | ForEach-Object {
+            $_.FullName.Substring((Join-Path $artifact 'home').Length + 1).Replace('\', '/')
+        } | Sort-Object)
+
+    $expected = @('.chezmoiexternal.toml', 'd.tmpl/f', 'dot_config/x', 'dot_config/git/config', 'dot_config/powershell/profile.ps1', 'empty_literal_run_w', 'empty_z', 'g.tmpl.literal', 'literal_private_y') | Sort-Object
+    Assert-True (($sources -join ',') -eq ($expected -join ',')) "Source names: $($sources -join ', ')"
+    $receipt = Read-TestText (Join-Path $artifact 'receipt.json')
+
+    foreach ($target in @('.config/x', 'private_y', 'z', 'run_w', 'd.tmpl/f', 'g.tmpl')) {
+        Assert-Match $receipt ('"Target":\s*"' + [regex]::Escape($target) + '"')
     }
 }
 
+Test 'chezmoi special files and the old home directory are rejected' {
+    $root = New-TestMachine -HomeFiles @{ '.chezmoiignore' = "x`n" }
+    Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) 'chezmoi special files'
+
+    $root = New-TestMachine
+    Set-TestFile (Join-Path $root 'machine\home\dot_vimrc') "x`n"
+    Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) "old home file directory.*'files'"
+}
+
 Test 'a home file inside a source directory is rejected' {
-    $root = New-TestMachine -HomeFiles @{ 'dot_config/nvim/init.lua' = "-- x`n" }
+    $root = New-TestMachine -HomeFiles @{ '.config/nvim/init.lua' = "-- x`n" }
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) "inside '\.config/nvim', which a source owns"
 }
 

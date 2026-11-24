@@ -9,7 +9,7 @@
 
     # '<WinGet id>' = @{ Enable = $true; Version = '<pin>'; Hold = $true; Source = 'winget' }
     # or the shorthand '<WinGet id>' = $true / $false. Hold keeps an installed
-    # package at its version during update; a missing one still installs.
+    # package at its version during upgrade system; a missing one still installs.
     Packages      = @{}
 
     # Core home files by target path. '<target>' = $false withdraws one.

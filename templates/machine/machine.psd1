@@ -17,7 +17,7 @@
     #     'Microsoft.PowerShell' = $false
     # }
 
-    # Withdraw a core home file so that home/ can own its target.
+    # Withdraw a core home file so that files/ can own its target.
     # Files = @{ '.config/git/config' = $false }
 
     # Replace or withdraw a pinned config source. Pin a new Repo with:

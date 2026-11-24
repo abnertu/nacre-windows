@@ -2,50 +2,38 @@
 # artifact. Switch applies an artifact and never evaluates again.
 Set-StrictMode -Version Latest
 
-# Static files only. Scripts, templates, symlinks, removals and partial
-# ownership would make the result depend on the host at apply time.
-$script:NwDirectoryAttributes = @('private_', 'readonly_', 'dot_')
-$script:NwFileAttributes = @('private_', 'readonly_', 'empty_', 'executable_', 'dot_')
-$script:NwRejectedPrefixes = @('run_', 'create_', 'modify_', 'remove_', 'symlink_', 'encrypted_', 'exact_', 'external_', 'literal_', 'after_', 'before_', 'once_', 'onchange_')
+# Home files keep their target names. Build gives each one its chezmoi
+# source name, so a name never acts as a chezmoi attribute.
+$script:NwChezmoiPrefixes = @('after_', 'before_', 'create_', 'dot_', 'empty_', 'encrypted_', 'exact_', 'executable_', 'external_', 'literal_', 'modify_', 'once_', 'onchange_', 'private_', 'readonly_', 'remove_', 'run_', 'symlink_')
+$script:NwChezmoiSuffixes = @('.tmpl', '.literal', '.age', '.asc')
 
-function ConvertTo-NwTargetName {
-    param([string]$Name, [string[]]$Attributes, [string]$SourcePath)
+function ConvertTo-NwSourceName {
+    param([string]$Name, [switch]$File, [switch]$Empty)
+    $prefix = ''
+    if ($File -and $Empty) { $prefix = 'empty_' }
 
     if ($Name.StartsWith('.')) {
-        throw "'$SourcePath': chezmoi ignores source names that start with '.'. Use the 'dot_' prefix."
+        $prefix += 'dot_'
+        $Name = $Name.Substring(1)
+    } elseif (@($script:NwChezmoiPrefixes | Where-Object { $Name.StartsWith($_) }).Count -gt 0) {
+        $prefix += 'literal_'
     }
 
-    foreach ($prefix in $script:NwRejectedPrefixes) {
-        if ($Name.StartsWith($prefix)) { throw "'$SourcePath': the '$prefix' attribute is not supported. Declare static files only." }
-    }
-
-    if ($Name.EndsWith('.tmpl') -or $Name.EndsWith('.literal') -or $Name.EndsWith('.age') -or $Name.EndsWith('.asc')) {
-        throw "'$SourcePath': templates and encrypted files are not supported. Declare static files only."
-    }
-
-    # chezmoi reads attributes in a fixed order.
-    foreach ($attribute in $Attributes) {
-        if ($Name.StartsWith($attribute)) {
-            $Name = $Name.Substring($attribute.Length)
-            if ($attribute -eq 'dot_') { $Name = '.' + $Name }
-        }
-    }
-
-    if (-not $Name -or $Name -eq '.') { throw "'$SourcePath' has no target name." }
-    return $Name
+    $suffix = ''
+    if ($File -and @($script:NwChezmoiSuffixes | Where-Object { $Name.EndsWith($_) }).Count -gt 0) { $suffix = '.literal' }
+    return $prefix + $Name + $suffix
 }
 
-function ConvertTo-NwTargetPath {
-    param([string]$RelativePath)
-    $parts = $RelativePath -split '/'
+function ConvertTo-NwSourcePath {
+    param([string]$Target, [switch]$Empty)
+    $parts = @($Target -split '/')
 
-    $target = for ($i = 0; $i -lt $parts.Count; $i++) {
-        $attributes = $script:NwDirectoryAttributes
-        if ($i -eq $parts.Count - 1) { $attributes = $script:NwFileAttributes }
-        ConvertTo-NwTargetName -Name $parts[$i] -Attributes $attributes -SourcePath $RelativePath
+    $source = for ($i = 0; $i -lt $parts.Count; $i++) {
+        $last = $i -eq $parts.Count - 1
+        ConvertTo-NwSourceName -Name $parts[$i] -File:$last -Empty:($last -and $Empty)
     }
 
-    return ($target -join '/')
+    return ($source -join '/')
 }
 
 function Get-NwRelativePath {
@@ -77,8 +65,8 @@ function Get-NwHomeFiles {
         $files += @{
             Owner  = $Owner
             Source = $item.FullName
-            Path   = $relative
-            Target = ConvertTo-NwTargetPath $relative
+            Path   = ConvertTo-NwSourcePath -Target $relative -Empty:($item.Length -eq 0)
+            Target = $relative
             Sha256 = Get-NwFileSha256 $item.FullName
         }
     }
@@ -95,8 +83,13 @@ function Test-NwPathWithin {
 
 function Resolve-NwHomeFiles {
     param([System.Collections.IDictionary]$Config, [string]$CoreRoot, [string]$MachineRoot, [string[]]$SourceTargets)
-    $core = Get-NwHomeFiles -Root (Join-Path $CoreRoot 'home') -Owner 'core'
-    $machine = Get-NwHomeFiles -Root (Join-Path $MachineRoot 'home') -Owner 'machine'
+
+    if (Test-Path -LiteralPath (Join-Path $MachineRoot 'home')) {
+        throw "'$(Join-Path $MachineRoot 'home')' is the old home file directory. Move its files to 'files' under their target names, such as files/.config/x."
+    }
+
+    $core = Get-NwHomeFiles -Root (Join-Path (Join-Path $CoreRoot 'files') 'home') -Owner 'core'
+    $machine = Get-NwHomeFiles -Root (Join-Path $MachineRoot 'files') -Owner 'machine'
 
     $coreTargets = @{}
     foreach ($file in $core) { $coreTargets[$file.Target.ToLowerInvariant()] = $file }

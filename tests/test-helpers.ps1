@@ -85,7 +85,7 @@ function New-TestMachine {
     Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{`n    SchemaVersion = 1`n$Settings`n}`n"
 
     foreach ($relative in $HomeFiles.Keys) {
-        Set-TestFile (Join-Path (Join-Path $root 'machine\home') $relative) $HomeFiles[$relative]
+        Set-TestFile (Join-Path (Join-Path $root 'machine\files') $relative) $HomeFiles[$relative]
     }
 
     if ($Lock) { Set-TestFile (Join-Path $root 'machine\nacre-windows.lock.json') $Lock }

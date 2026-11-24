@@ -275,7 +275,7 @@ Test 'switch supports redirected Documents and catches overlaps through a second
     try {
         Assert-Success (Invoke-TestModuleSwitch $root)
         Assert-True (Test-Path -LiteralPath (Join-Path $physical 'PowerShell\Modules\Fixture\1.0\Fixture.psd1')) 'Switch ignored the Documents target.'
-        Set-TestFile (Join-Path $root 'machine\home\other\PowerShell\Modules\Fixture\conflict') 'conflict'
+        Set-TestFile (Join-Path $root 'machine\files\other\PowerShell\Modules\Fixture\conflict') 'conflict'
         Set-TestFile (Join-Path $root 'log.txt') ''
         Assert-ModulePreflightFailure -Root $root -Pattern 'overlaps the module directory'
     } finally {
