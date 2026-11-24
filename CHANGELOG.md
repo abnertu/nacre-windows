@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-25
+
+### Fixed
+
+- `plan` and `doctor` no longer report an installed package as missing when its source no longer offers the installed version, such as an older Node.js LTS.
+- The wrapper, the core and `install.ps1` hide PowerShell's own progress bars, which left broken lines behind.
+
 ## [0.1.2] - 2026-11-25
 
 ### Changed
@@ -37,7 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `lock core`; run `upgrade self`.
 
-[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.2...HEAD
+[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.3...HEAD
+[0.1.3]: https://github.com/abnertu/nacre-windows/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/abnertu/nacre-windows/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/abnertu/nacre-windows/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/abnertu/nacre-windows/releases/tag/0.1.0
