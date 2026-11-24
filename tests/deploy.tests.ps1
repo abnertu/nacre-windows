@@ -13,12 +13,16 @@ Test 'switch applies the built artifact and records it' {
     Assert-True (-not (Test-Path (Join-Path $root 'state\pending.json'))) 'The pending marker remains after success.'
 }
 
-Test 'update -Yes upgrades packages and skips prompts' {
+Test 'upgrade system -Yes upgrades packages and skips prompts' {
     $root = New-TestMachine -WithoutRoleModules
-    $result = Invoke-Nw -Root $root -Arguments @('update', '-Yes')
+    $result = Invoke-Nw -Root $root -Arguments @('upgrade', 'system', '-Yes')
     Assert-Success $result
     Assert-Match $result.Log 'configuration-update\.winget --accept-configuration-agreements'
     Assert-NoMatch $result.Log '--interactive'
+
+    foreach ($arguments in @(@('update'), @('upgrade'), @('upgrade', 'everything'))) {
+        Assert-Failure (Invoke-Nw -Root $root -Arguments $arguments) ''
+    }
 }
 
 Test 'a failed package stage stops before the home stage and doctor reports it' {
@@ -60,7 +64,7 @@ Test 'the machine wrapper runs the core from -OverrideCore and forwards argument
     $root = New-TestMachine -WithoutRoleModules
     Copy-Item -LiteralPath (Join-Path $script:CoreRoot 'templates\machine\nacre.ps1') -Destination (Join-Path $root 'machine\nacre.ps1')
     $wrapper = Join-Path $root 'machine\nacre.ps1'
-    $result = Invoke-TestScript -Root $root -Script $wrapper -Arguments @('update', '-OverrideCore', $script:CoreRoot, '-Yes')
+    $result = Invoke-TestScript -Root $root -Script $wrapper -Arguments @('upgrade', 'system', '-OverrideCore', $script:CoreRoot, '-Yes')
     Assert-Success $result
     Assert-Match $result.Log 'configuration-update\.winget --accept-configuration-agreements'
 }

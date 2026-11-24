@@ -2,7 +2,7 @@
 # Machine entry point. It runs the nacre-windows core that
 # nacre-windows.lock.json pins, after it verifies the archive checksum.
 #
-#   .\nacre.ps1 plan | switch | update | doctor | build  [-Yes]
+#   .\nacre.ps1 plan | switch | upgrade system | doctor | build  [-Yes]
 #   .\nacre.ps1 lock [<Name>...] [-Rev <commit> | -Version <version>]
 #   .\nacre.ps1 lock core [-Rev <commit>]
 #

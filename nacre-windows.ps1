@@ -7,9 +7,10 @@
       build     Evaluate the machine into an artifact and print its path.
       plan      Build, then preview package drift, module installs and home changes.
       switch    Build, then apply packages, modules and home files.
-      update    Switch, and also upgrade each package without Version or Hold.
+      upgrade system
+                Switch, and also upgrade each package without Version or Hold.
                 -Yes accepts the WinGet agreement in each command, and skips
-                the chezmoi prompts of switch and update.
+                the chezmoi prompts of switch and upgrade system.
       doctor    Report drift and conflicts. Changes nothing.
       lock      Pin sources and modules: lock [<Name>...] [-Rev <commit>] [-Version <version>].
                 A source takes the newest commit of its default branch, or
@@ -22,7 +23,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('build', 'plan', 'switch', 'update', 'doctor', 'lock', 'version', 'help')]
+    [ValidateSet('build', 'plan', 'switch', 'upgrade', 'doctor', 'lock', 'version', 'help')]
     [string]$Command = 'help',
 
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
@@ -59,7 +60,11 @@ if ($Command -eq 'version') {
 
 $machineRoot = (Resolve-Path -LiteralPath $Machine).Path
 
-if ($Names.Count -gt 0 -and $Command -ne 'lock') {
+if ($Command -eq 'upgrade' -and ($Names.Count -ne 1 -or $Names[0] -ne 'system')) {
+    throw "Usage: upgrade system. The machine wrapper runs upgrade self."
+}
+
+if ($Names.Count -gt 0 -and $Command -notin @('lock', 'upgrade')) {
     throw "'$Command' takes no names: $($Names -join ' ')."
 }
 
@@ -70,7 +75,7 @@ switch ($Command) {
     }
     'plan' { Invoke-NwPlan -CoreRoot $coreRoot -MachineRoot $machineRoot -Yes:$Yes }
     'switch' { Invoke-NwSwitch -CoreRoot $coreRoot -MachineRoot $machineRoot -Yes:$Yes }
-    'update' { Invoke-NwSwitch -CoreRoot $coreRoot -MachineRoot $machineRoot -Update -Yes:$Yes }
+    'upgrade' { Invoke-NwSwitch -CoreRoot $coreRoot -MachineRoot $machineRoot -Update -Yes:$Yes }
     'doctor' { Invoke-NwDoctor -CoreRoot $coreRoot -MachineRoot $machineRoot -Yes:$Yes }
     'lock' {
         $config = Resolve-NwConfiguration -CoreRoot $coreRoot -MachineRoot $machineRoot
