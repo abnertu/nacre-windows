@@ -109,17 +109,19 @@
 - Edit formatter rules in `PSScriptAnalyzerSettings.psd1`. Edit blank-line rules in `scripts/format.ps1`.
 - Keep each `.ps1` and `.psd1` file ASCII with LF line endings. Windows PowerShell 5.1 reads a BOM-less script as the ANSI code page.
 - Hash JSON from `ConvertTo-NwJson` only. `ConvertTo-Json` output differs between 5.1 and 7, so artifact identifiers would differ.
-- Keep the build static. Read host state only in `switch` and `doctor`.
+- Keep the build static. Read host state only in `switch`, `plan` and `doctor`.
 - Key each collection by identifier, so that a later layer can withdraw an entry.
 
 ## Ownership and deployment
 
 - WinGet DSC owns packages. chezmoi owns home files and source directories.
 - nacre-windows owns `XDG_CONFIG_HOME`, the Development junctions and its state in `%LOCALAPPDATA%\nacre-windows`.
+- nacre-windows owns the module versions it installs and their staging directories.
 - Leave PATH entries to package installers. Leave `$PROFILE` lines, Git identity and credentials to the operator.
-- Give each target one owner. Make a conflict a build error.
+- Give each target one owner. Reject declared ownership conflicts in build. Check host-resolved module paths for ownership conflicts in preflight.
 - Never apply a source archive through a link. The archive owns its directory exactly, so it would delete the worktree.
 - Record intent in `pending.json` before a mutation. Clear it only after success.
-- Make a disabled declaration withdraw management only. Never uninstall or delete as cleanup.
+- Make a disabled declaration withdraw management only. Keep installed packages and module versions. Delete only staging directories owned by nacre-windows.
 - Never capture host state into a machine repository automatically.
+- Limit execution policy changes to `CurrentUser` for an installed edition with managed modules and an effective local `Restricted` policy.
 - Get the user's go-ahead before you deploy, install packages or change the live environment.

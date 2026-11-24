@@ -1,7 +1,7 @@
 # Plan, switch and doctor against fake winget and chezmoi.
 
 Test 'switch applies the built artifact and records it' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     $artifact = Invoke-TestBuild $root
     $result = Invoke-Nw -Root $root -Arguments @('switch')
     Assert-Success $result
@@ -14,7 +14,7 @@ Test 'switch applies the built artifact and records it' {
 }
 
 Test 'update -Yes upgrades packages and skips prompts' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     $result = Invoke-Nw -Root $root -Arguments @('update', '-Yes')
     Assert-Success $result
     Assert-Match $result.Log 'configuration-update\.winget --accept-configuration-agreements'
@@ -22,7 +22,7 @@ Test 'update -Yes upgrades packages and skips prompts' {
 }
 
 Test 'a failed package stage stops before the home stage and doctor reports it' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     $result = Invoke-Nw -Root $root -Arguments @('switch') -Environment @{ NW_FAKE_WINGET_EXIT = '3' }
     Assert-Failure $result 'exit code 3'
     Assert-NoMatch $result.Log 'chezmoi apply'
@@ -32,7 +32,7 @@ Test 'a failed package stage stops before the home stage and doctor reports it' 
 }
 
 Test 'plan changes nothing and tolerates reported drift' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     $result = Invoke-Nw -Root $root -Arguments @('plan') -Environment @{ NW_FAKE_WINGET_TEST_EXIT = '1' }
     Assert-Success $result
     Assert-Match $result.Log 'winget configure show -f'
@@ -44,20 +44,20 @@ Test 'plan changes nothing and tolerates reported drift' {
 }
 
 Test 'plan -Yes accepts the agreement that a WinGet test asks for' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     Assert-Success (Invoke-Nw -Root $root -Arguments @('plan', '-Yes'))
     Assert-Match (Read-TestText (Join-Path $root 'log.txt')) 'winget configure test -f .*configuration\.winget --accept-configuration-agreements'
 }
 
 Test 'doctor reports a configuration that changed after the last switch' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     Assert-Success (Invoke-Nw -Root $root -Arguments @('switch', '-Yes'))
     Set-TestFile (Join-Path $root 'machine\home\dot_vimrc') "set number`n"
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('doctor')) 'configuration changed since the last switch'
 }
 
 Test 'the machine wrapper runs the core from -OverrideCore and forwards arguments' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     Copy-Item -LiteralPath (Join-Path $script:CoreRoot 'templates\machine\nacre.ps1') -Destination (Join-Path $root 'machine\nacre.ps1')
     $wrapper = Join-Path $root 'machine\nacre.ps1'
     $result = Invoke-TestScript -Root $root -Script $wrapper -Arguments @('update', '-OverrideCore', $script:CoreRoot, '-Yes')

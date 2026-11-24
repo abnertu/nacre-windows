@@ -25,6 +25,12 @@
     # '<Source>' = '<absolute path>' links a local worktree instead of the pin.
     Development   = @{}
 
+    # PowerShell Gallery modules: '<Gallery id>' = @{ Enable = $true; AcceptLicense = $true }
+    # or the shorthand '<Gallery id>' = $true / $false. lock pins each version.
+    Modules       = @{
+        PSReadLine = @{ Enable = $false }
+    }
+
     # Commands that doctor expects in exactly one PATH directory.
     Doctor        = @{
         Commands = @{ git = $true; chezmoi = $true }

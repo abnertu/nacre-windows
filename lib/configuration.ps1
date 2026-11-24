@@ -15,6 +15,8 @@ $script:NwSchema = @{
     Sources       = @{ '*' = @{ Enable = 'bool'; Repo = 'string'; Target = 'string' } }
     # Source name -> absolute path of a local worktree, linked instead of the pin.
     Development   = @{ '*' = 'string' }
+    # Gallery Id -> a PowerShell Gallery module, pinned in the lock files.
+    Modules       = @{ '*' = @{ Enable = 'bool'; AcceptLicense = 'bool' } }
     Doctor        = @{ Commands = @{ '*' = 'bool' } }
 }
 
@@ -80,7 +82,7 @@ function ConvertTo-NwNormalLayer {
     $result = @{}
     foreach ($key in $Layer.Keys) { $result[$key] = $Layer[$key] }
 
-    foreach ($section in @('Packages', 'Sources')) {
+    foreach ($section in @('Packages', 'Sources', 'Modules')) {
         if ($result.ContainsKey($section) -and $result[$section] -is [System.Collections.IDictionary]) {
             $map = @{}
 
@@ -177,6 +179,16 @@ function Get-NwRoleChain {
     return , $chain
 }
 
+# A module name becomes a directory name under each module root. Windows
+# strips a trailing dot and cannot make a device name, and the machine
+# wrapper reads 'lock core' as the core pin.
+function Test-NwModuleName {
+    param([string]$Name)
+    if ($Name -cnotmatch '^[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?\z' -or $Name.Contains('..')) { return $false }
+    if ($Name.Split('.')[0] -imatch '^(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])$') { return $false }
+    return ($Name -ine 'core')
+}
+
 function Assert-NwConfiguration {
     param([System.Collections.IDictionary]$Config)
     $errors = New-Object 'System.Collections.Generic.List[string]'
@@ -210,6 +222,14 @@ function Assert-NwConfiguration {
         if (-not $source.ContainsKey('Target') -or $source['Target'] -notmatch '^[A-Za-z0-9_.-]+$' -or $source['Target'] -match '^\.+$') {
             $errors.Add("Sources.$name.Target must be one directory name under ConfigHome.")
         }
+    }
+
+    foreach ($name in $Config['Modules'].Keys) {
+        if (-not (Test-NwModuleName ([string]$name))) {
+            $errors.Add("Modules.$name is not a valid module name. Device names, such as 'CON', and 'core' are reserved.")
+        }
+
+        if (-not $Config['Modules'][$name].ContainsKey('Enable')) { $errors.Add("Modules.$name needs Enable.") }
     }
 
     foreach ($name in $Config['Development'].Keys) {

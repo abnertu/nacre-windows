@@ -32,6 +32,14 @@ function Assert-NoMatch {
     if ($Text -match $Pattern) { throw "Did not expect /$Pattern/ $Message. Output:`n$Text" }
 }
 
+function Assert-Throws {
+    param([scriptblock]$Body, [string]$Pattern)
+    $message = $null
+    try { & $Body | Out-Null } catch { $message = $_.Exception.Message }
+    if ($null -eq $message) { throw "Expected an error /$Pattern/." }
+    Assert-Match $message $Pattern 'in the error'
+}
+
 function New-TestRoot {
     $path = Join-Path $script:TempRoot ([guid]::NewGuid().ToString('N').Substring(0, 12))
     New-Item -ItemType Directory -Path $path | Out-Null
@@ -71,8 +79,9 @@ function Set-TestFile {
 }
 
 function New-TestMachine {
-    param([string]$Settings = '', [hashtable]$HomeFiles = @{}, [string]$Lock)
+    param([string]$Settings = '', [hashtable]$HomeFiles = @{}, [string]$Lock, [switch]$WithoutRoleModules)
     $root = New-TestRoot
+    if ($WithoutRoleModules) { $Settings += "`n    Modules = @{ PSReadLine = `$false }" }
     Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{`n    SchemaVersion = 1`n$Settings`n}`n"
 
     foreach ($relative in $HomeFiles.Keys) {
@@ -153,4 +162,69 @@ function Invoke-TestBuild {
 function Read-TestText {
     param([string]$Path)
     return [System.IO.File]::ReadAllText($Path)
+}
+
+# Write a zip file of entry name -> text, as a nupkg is.
+function New-TestZip {
+    param([string]$Path, [System.Collections.IDictionary]$Entries)
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $parent = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+    if (Test-Path -LiteralPath $Path) { Remove-Item -LiteralPath $Path -Force }
+    $zip = [System.IO.Compression.ZipFile]::Open($Path, [System.IO.Compression.ZipArchiveMode]::Create)
+
+    try {
+        foreach ($name in $Entries.Keys) {
+            $writer = New-Object System.IO.StreamWriter($zip.CreateEntry($name).Open())
+            try { $writer.Write([string]$Entries[$name]) } finally { $writer.Dispose() }
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
+
+# Add a fake module package to a local gallery at <Gallery>\<Id>\<File>.nupkg.
+# Each part of the nuspec and the manifest can be replaced.
+function New-TestModulePackage {
+    param(
+        [string]$Gallery,
+        [string]$Id,
+        [string]$Version,
+        [string]$File = $Version,
+        [string]$NuspecId = $Id,
+        [string]$NuspecVersion = $Version,
+        [string]$ModuleVersion = $Version,
+        [string]$ManifestLines = '',
+        [string]$Dependencies = '',
+        [string]$License = '',
+        [string]$Manifest,
+        [System.Collections.IDictionary]$Extra = @{},
+        [switch]$NoManifest
+    )
+
+    $metadata = "    <id>$NuspecId</id>`n    <version>$NuspecVersion</version>`n    <authors>test</authors>`n"
+    if ($License) { $metadata += "    <requireLicenseAcceptance>$License</requireLicenseAcceptance>`n" }
+    if ($Dependencies) { $metadata += "    <dependencies>$Dependencies</dependencies>`n" }
+
+    $entries = [ordered]@{
+        '_rels/.rels'                                        = '<Relationships />'
+        "$NuspecId.nuspec"                                   = "<?xml version=`"1.0`" encoding=`"utf-8`"?>`n<package xmlns=`"http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd`">`n  <metadata>`n$metadata  </metadata>`n</package>`n"
+        "$NuspecId.psm1"                                     = "function Get-$($NuspecId -replace '[^A-Za-z0-9]', '') { '$ModuleVersion' }`n"
+        '[Content_Types].xml'                                = '<Types />'
+        'package/services/metadata/core-properties/x.psmdcp' = '<coreProperties />'
+    }
+
+    if (-not $NoManifest) {
+        if (-not $PSBoundParameters.ContainsKey('Manifest')) {
+            $Manifest = "@{`n    ModuleVersion = '$ModuleVersion'`n    RootModule = '$NuspecId.psm1'`n$ManifestLines`n}`n"
+        }
+
+        $entries["$NuspecId.psd1"] = $Manifest
+    }
+
+    foreach ($name in $Extra.Keys) { $entries[$name] = $Extra[$name] }
+    $path = Join-Path (Join-Path $Gallery $Id) "$File.nupkg"
+    New-TestZip -Path $path -Entries $entries
+    return $path
 }

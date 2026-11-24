@@ -7,8 +7,8 @@ $script:NwBothScopeNames = @('Path', 'TEMP', 'TMP')
 
 function Get-NwEnvironmentIssues {
     param(
-        [System.Collections.IDictionary]$MachineVariables,
-        [System.Collections.IDictionary]$UserVariables,
+        [System.Collections.IDictionary]$MachineVariables = [Environment]::GetEnvironmentVariables('Machine'),
+        [System.Collections.IDictionary]$UserVariables = [Environment]::GetEnvironmentVariables('User'),
         [scriptblock]$TestDirectory = { param($Path) Test-Path -LiteralPath $Path -PathType Container }
     )
 
@@ -123,6 +123,15 @@ function Invoke-NwDoctor {
     }
 
     $issues += Get-NwSourceIssues $build
+    $modules = Get-NwModuleState $build
+    $issues += $modules.Blocking
+    foreach ($warning in $modules.Warnings) { Write-Warning $warning }
+
+    foreach ($install in $modules.Installs) {
+        $issues += "PowerShell module '$($install.Id)' version '$($install.Pin.ModuleVersion)' is missing from '$($install.VersionPath)'. Run switch."
+    }
+
+    $issues += @(Get-NwModulePolicyChanges $build | ForEach-Object { $_.Message })
 
     foreach ($name in (Get-NwSortedKeys $build.Links)) {
         $link = $build.Links[$name]
@@ -138,9 +147,8 @@ function Invoke-NwDoctor {
         $issues += "XDG_CONFIG_HOME is '$($configHome.Effective)', not '$($configHome.Desired)'."
     }
 
-    $issues += Get-NwEnvironmentIssues `
-        -MachineVariables ([Environment]::GetEnvironmentVariables('Machine')) `
-        -UserVariables ([Environment]::GetEnvironmentVariables('User'))
+    # An alternate home is isolated from persistent user and machine settings.
+    if (-not (Test-NwAlternateHome)) { $issues += Get-NwEnvironmentIssues }
 
     $issues += Get-NwCommandIssues $build.Config['Doctor']['Commands']
 

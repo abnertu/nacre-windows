@@ -30,6 +30,14 @@
     # Link a local worktree instead of the pinned source.
     # Development = @{ Neovim = 'C:\Users\you\codebase\your-nvim' }
 
+    # Add or withdraw a PowerShell Gallery module. Pin its version with:
+    #   .\nacre.ps1 lock <Module>
+    # A module whose license needs acceptance also needs AcceptLicense.
+    # Modules = @{
+    #     PSReadLine    = $true
+    #     'Some.Module' = @{ Enable = $true; AcceptLicense = $true }
+    # }
+
     # Commands that doctor expects in exactly one PATH directory.
     # Doctor = @{ Commands = @{ pnpm = $true } }
 }

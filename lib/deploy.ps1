@@ -141,6 +141,18 @@ function Invoke-NwPlan {
 
     foreach ($issue in (Get-NwSourceIssues $build)) { Write-Warning "Switch stops: $issue" }
 
+    $modules = Get-NwModuleState $build
+    foreach ($issue in $modules.Blocking) { Write-Warning "Switch stops: $issue" }
+    foreach ($warning in $modules.Warnings) { Write-Warning $warning }
+
+    foreach ($install in $modules.Installs) {
+        Write-Host "Switch installs PowerShell module '$($install.Id)' version '$($install.Pin.ModuleVersion)' to '$($install.VersionPath)'."
+    }
+
+    foreach ($change in (Get-NwModulePolicyChanges $build)) {
+        if ($change.Blocking) { Write-Warning "Switch stops: $($change.Message)" } else { Write-Host $change.Message }
+    }
+
     foreach ($name in (Get-NwSortedKeys $build.Links)) {
         Write-Host "$name is linked to the Development path '$($build.Links[$name].Path)'."
     }
@@ -154,17 +166,58 @@ function Invoke-NwPlan {
     Write-Host 'Plan changes nothing.'
 }
 
+function Assert-NwSwitchPreflight {
+    param($Build, $ModuleState)
+    $issues = (Get-NwSourceIssues $Build) + $ModuleState.Blocking
+    $issues += @(Get-NwModulePolicyChanges $Build | Where-Object { $_.Blocking } | ForEach-Object { $_.Message })
+
+    if ($issues.Count -gt 0) {
+        throw ("Switch changed nothing:" + [Environment]::NewLine + '  ' + ($issues -join ([Environment]::NewLine + '  ')))
+    }
+}
+
 function Invoke-NwSwitch {
     param([string]$CoreRoot, [string]$MachineRoot, [switch]$Update, [switch]$Yes)
     $build = Invoke-NwBuild -CoreRoot $CoreRoot -MachineRoot $MachineRoot
     Write-Host "Artifact $($build.Id): $($build.Path)"
-    # Preflight: stop before any mutation when a source target is unsafe.
-    $issues = Get-NwSourceIssues $build
+    $moduleState = Get-NwModuleState $build
+    Assert-NwSwitchPreflight -Build $build -ModuleState $moduleState
 
-    if ($issues.Count -gt 0) {
-        throw ("Switch changed nothing:`n  " + ($issues -join "`n  "))
+    if (-not $moduleState.Documents) {
+        Invoke-NwDeployment -Build $build -ModuleState $moduleState -Update:$Update -Yes:$Yes
+        return
     }
 
+    # Local users can run multiple switches against one redirected path.
+    # Hold the mutex through deployment so only one switch owns staging.
+    $documents = $moduleState.Documents.TrimEnd('\')
+    $key = Get-NwTextSha256 $documents.ToUpperInvariant()
+    $mutex = New-Object Threading.Mutex($false, "Global\nacre-windows-modules-$key")
+    $locked = $false
+
+    try {
+        try {
+            $locked = $mutex.WaitOne()
+        } catch [Threading.AbandonedMutexException] {
+            $locked = $true
+        }
+
+        $moduleState = Get-NwModuleState $build
+        Assert-NwSwitchPreflight -Build $build -ModuleState $moduleState
+
+        if (-not [string]::Equals($moduleState.Documents.TrimEnd('\'), $documents, [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'Switch changed nothing: the Documents directory changed during preflight. Run switch again.'
+        }
+
+        Invoke-NwDeployment -Build $build -ModuleState $moduleState -Update:$Update -Yes:$Yes
+    } finally {
+        if ($locked) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
+function Invoke-NwDeployment {
+    param($Build, $ModuleState, [switch]$Update, [switch]$Yes)
     $state = Get-NwStateRoot
     $pending = Join-Path $state 'pending.json'
     # Record the intent before a mutation; clear it after success.
@@ -184,6 +237,8 @@ function Invoke-NwSwitch {
         throw 'chezmoi is not on PATH after the package stage. Declare twpayne.chezmoi or install chezmoi.'
     }
 
+    Set-NwModulePolicies $build
+    Install-NwModules $ModuleState
     Set-NwSourceLinks $build
     $apply = @('apply') + (Get-NwChezmoiArguments $build.Path)
     # Interactive apply asks before it replaces a file that differs.

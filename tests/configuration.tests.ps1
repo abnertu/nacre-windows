@@ -52,3 +52,29 @@ Test 'a machine file cannot run code' {
     $root = New-TestMachine -Settings "    Role = (Get-Date).ToString()"
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) 'Cannot read'
 }
+
+Test 'Modules takes the shorthand and AcceptLicense' {
+    $root = New-TestMachine -Settings "    Modules = @{ PSReadLine = `$false; 'Foo.Bar' = @{ Enable = `$false; AcceptLicense = `$true } }"
+    Invoke-TestBuild $root | Out-Null
+}
+
+Test 'Modules rejects an unknown key, a missing Enable and a reserved or invalid name' {
+    $cases = @{
+        "Modules = @{ PSReadLine = @{ Enable = `$true; Version = '1.0' } }" = 'Settings\.Modules\.PSReadLine\.Version is not a known setting'
+        "Modules = @{ Foo = @{ AcceptLicense = `$true } }"                  = 'Modules\.Foo needs Enable'
+        "Modules = @{ 'Foo.' = `$false }"                                   = 'Modules\.Foo\. is not a valid module name'
+        "Modules = @{ 'a..b' = `$false }"                                   = 'Modules\.a\.\.b is not a valid module name'
+        "Modules = @{ 'COM0' = `$false }"                                   = 'Modules\.COM0 is not a valid module name'
+        "Modules = @{ 'lpt0.x' = `$false }"                                 = 'Modules\.lpt0\.x is not a valid module name'
+        "Modules = @{ 'Nul' = `$false }"                                    = 'Modules\.Nul is not a valid module name'
+        "Modules = @{ 'Core' = `$false }"                                   = 'Modules\.Core is not a valid module name'
+    }
+
+    foreach ($settings in $cases.Keys) {
+        $root = New-TestMachine -Settings "    $settings"
+        Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) $cases[$settings]
+    }
+
+    $root = New-TestMachine -Settings "    Modules = @{ 'COM10' = `$false; 'Console' = `$false; 'Core.Utils' = `$false }"
+    Invoke-TestBuild $root | Out-Null
+}

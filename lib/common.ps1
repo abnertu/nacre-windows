@@ -103,6 +103,14 @@ function ConvertTo-NwJson {
         return $Value.ToString([System.Globalization.CultureInfo]::InvariantCulture)
     }
 
+    if ($Value -is [decimal] -or $Value -is [System.Numerics.BigInteger]) {
+        return $Value.ToString([System.Globalization.CultureInfo]::InvariantCulture)
+    }
+
+    if ($Value -is [double] -and -not [double]::IsInfinity($Value) -and -not [double]::IsNaN($Value)) {
+        return $Value.ToString('R', [System.Globalization.CultureInfo]::InvariantCulture)
+    }
+
     if ($Value -is [System.Collections.IDictionary]) {
         $keys = @(Get-NwSortedKeys $Value)
         if ($keys.Count -eq 0) { return '{}' }
@@ -146,9 +154,52 @@ function ConvertTo-NwHashtable {
     return $Value
 }
 
+function ConvertFrom-NwJsonToken {
+    param($Token)
+
+    switch ($Token.get_Type().ToString()) {
+        'Object' {
+            $result = @{}
+
+            foreach ($property in $Token.Properties()) {
+                $result[$property.Name] = ConvertFrom-NwJsonToken $property.get_Value()
+            }
+
+            return $result
+        }
+        'Array' { return , @($Token.Children() | ForEach-Object { ConvertFrom-NwJsonToken $_ }) }
+        default { return $Token.get_Value() }
+    }
+}
+
+function Read-NwTextForReplace {
+    param([string]$Path)
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, ([IO.FileShare]::Read -bor [IO.FileShare]::Delete))
+    $reader = [IO.StreamReader]::new($stream)
+    try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
+}
+
 function Read-NwJson {
     param([string]$Path)
-    $text = [System.IO.File]::ReadAllText($Path)
+    $text = Read-NwTextForReplace $Path
+
+    if (-not $text.TrimStart().StartsWith('{', [StringComparison]::Ordinal)) {
+        throw "'$Path' is not a JSON object."
+    }
+
+    if ($PSVersionTable.PSEdition -eq 'Core') {
+        $reader = [Newtonsoft.Json.JsonTextReader]::new([IO.StringReader]::new($text))
+
+        try {
+            $reader.DateParseHandling = [Newtonsoft.Json.DateParseHandling]::None
+            $document = [Newtonsoft.Json.Linq.JObject]::Load($reader)
+            if ($reader.Read()) { throw "'$Path' has data after its JSON object." }
+            return (ConvertFrom-NwJsonToken $document)
+        } finally {
+            $reader.Dispose()
+        }
+    }
+
     return (ConvertTo-NwHashtable (ConvertFrom-Json $text))
 }
 

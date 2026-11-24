@@ -88,9 +88,9 @@ function Get-NwHomeFiles {
 
 function Test-NwPathWithin {
     param([string]$Path, [string]$Directory)
-    $p = $Path.ToLowerInvariant()
-    $d = $Directory.ToLowerInvariant()
-    return ($p -eq $d -or $p.StartsWith($d + '/'))
+
+    return ([string]::Equals($Path, $Directory, [StringComparison]::OrdinalIgnoreCase) -or
+        $Path.StartsWith($Directory + '/', [StringComparison]::OrdinalIgnoreCase))
 }
 
 function Resolve-NwHomeFiles {
@@ -236,6 +236,53 @@ function New-NwExternalDocument {
     return (($lines -join "`n") + "`n")
 }
 
+# Each pinned dependency of an enabled module must be an enabled module
+# inside every range, with each edition of the module that needs it.
+function Assert-NwModulePins {
+    param([System.Collections.IDictionary]$Config, [System.Collections.IDictionary]$Pins)
+    $errors = @()
+
+    foreach ($id in (Get-NwSortedKeys $Pins)) {
+        $pin = $Pins[$id]
+        $key = Find-NwKey $Config['Modules'] $id
+
+        if ($pin['RequireLicenseAcceptance'] -and -not ($Config['Modules'][$key].ContainsKey('AcceptLicense') -and $Config['Modules'][$key]['AcceptLicense'])) {
+            $errors += "Module '$id' requires license acceptance. Read its license, then set Modules.$key.AcceptLicense = `$true."
+        }
+
+        foreach ($name in (Get-NwSortedKeys $pin['Dependencies'])) {
+            $declared = Find-NwKey $Config['Modules'] $name
+
+            if (-not $declared) {
+                $errors += "Module '$id' depends on '$name', which is not a declared module. Declare Modules = @{ '$name' = `$true }."
+                continue
+            }
+
+            if (-not $Config['Modules'][$declared]['Enable']) {
+                $errors += "Module '$id' depends on '$name', which is disabled."
+                continue
+            }
+
+            $dependency = Find-NwKey $Pins $name
+            $version = $Pins[$dependency]['Version']
+            $ranges = @($pin['Dependencies'][$name])
+            $outside = @($ranges | Where-Object { -not (Test-NwVersionInRange (ConvertTo-NwVersion $version) (ConvertTo-NwVersionRange $_)) })
+
+            if ($outside.Count -gt 0) {
+                $errors += "Module '$id' needs '$dependency' in $($ranges -join ' and '), but '$dependency' is pinned at $version."
+            }
+
+            $missing = @($pin['Editions'] | Where-Object { @($Pins[$dependency]['Editions']) -notcontains $_ })
+
+            if ($missing.Count -gt 0) {
+                $errors += "Module '$id' needs '$dependency' for $($missing -join ', '), but '$dependency' supports only $(@($Pins[$dependency]['Editions']) -join ', ')."
+            }
+        }
+    }
+
+    if ($errors.Count -gt 0) { throw ("Invalid modules:`n  " + ($errors -join "`n  ")) }
+}
+
 function Invoke-NwBuild {
     param([string]$CoreRoot, [string]$MachineRoot)
     $config = Resolve-NwConfiguration -CoreRoot $CoreRoot -MachineRoot $MachineRoot
@@ -244,6 +291,8 @@ function Invoke-NwBuild {
     $archives = @{}
     foreach ($name in $targets.Keys) { if (-not $links.ContainsKey($name)) { $archives[$name] = $targets[$name] } }
     $pins = Resolve-NwSourcePins -Config $config -CoreRoot $CoreRoot -MachineRoot $MachineRoot -Names @($archives.Keys)
+    $modules = Resolve-NwModulePins -Config $config -CoreRoot $CoreRoot -MachineRoot $MachineRoot
+    Assert-NwModulePins -Config $config -Pins $modules
     $files = Resolve-NwHomeFiles -Config $config -CoreRoot $CoreRoot -MachineRoot $MachineRoot -SourceTargets @($targets.Values)
 
     $documents = @{
@@ -261,6 +310,7 @@ function Invoke-NwBuild {
         CoreVersion   = ([System.IO.File]::ReadAllText((Join-Path $CoreRoot 'VERSION'))).Trim()
         Configuration = $config
         Sources       = $pins
+        Modules       = $modules
         Links         = $links
         Files         = @($files | ForEach-Object { @{ Owner = $_.Owner; Path = $_.Path; Target = $_.Target; Sha256 = $_.Sha256 } })
         Documents     = @{}
@@ -298,5 +348,5 @@ function Invoke-NwBuild {
         }
     }
 
-    return @{ Id = $id; Path = $path; Receipt = $receipt; Config = $config; Targets = $targets; Archives = $archives; Links = $links }
+    return @{ Id = $id; Path = $path; Receipt = $receipt; Config = $config; Targets = $targets; Archives = $archives; Links = $links; Modules = $modules }
 }

@@ -5,13 +5,16 @@
 .DESCRIPTION
     Commands:
       build     Evaluate the machine into an artifact and print its path.
-      plan      Build, then preview package drift and home changes.
-      switch    Build, then apply packages and home files.
+      plan      Build, then preview package drift, module installs and home changes.
+      switch    Build, then apply packages, modules and home files.
       update    Switch, and also upgrade each package without Version or Hold.
                 -Yes accepts the WinGet agreement in each command, and skips
                 the chezmoi prompts of switch and update.
       doctor    Report drift and conflicts. Changes nothing.
-      lock      Pin sources to their newest commit: lock [<Source>...] [-Rev <commit>].
+      lock      Pin sources and modules: lock [<Name>...] [-Rev <commit>] [-Version <version>].
+                A source takes the newest commit of its default branch, or
+                -Rev. A module takes the newest stable Gallery version, or
+                -Version. Each option needs exactly one name of its kind.
       version   Print the core version.
 .EXAMPLE
     .\nacre-windows.ps1 plan -Machine ..\machines\windows
@@ -29,7 +32,10 @@ param(
     [string]$Machine = (Get-Location).Path,
 
     [switch]$Yes,
-    [string]$Rev
+    [ValidateNotNullOrEmpty()]
+    [string]$Rev,
+    [ValidateNotNullOrEmpty()]
+    [string]$Version
 )
 
 Set-StrictMode -Version Latest
@@ -37,7 +43,7 @@ $ErrorActionPreference = 'Stop'
 
 $coreRoot = $PSScriptRoot
 
-foreach ($name in @('common', 'configuration', 'lock', 'build', 'deploy', 'doctor')) {
+foreach ($name in @('common', 'configuration', 'version', 'gallery', 'lock', 'build', 'modules', 'execution-policy', 'deploy', 'doctor')) {
     . (Join-Path (Join-Path $coreRoot 'lib') "$name.ps1")
 }
 
@@ -68,7 +74,9 @@ switch ($Command) {
     'doctor' { Invoke-NwDoctor -CoreRoot $coreRoot -MachineRoot $machineRoot -Yes:$Yes }
     'lock' {
         $config = Resolve-NwConfiguration -CoreRoot $coreRoot -MachineRoot $machineRoot
-        Lock-NwSourcePins -Config $config -LockPath (Join-Path $machineRoot $script:NwMachineLockName) -Names $Names -Rev $Rev
+
+        Lock-NwPins -Config $config -LockPath (Join-Path $machineRoot $script:NwMachineLockName) `
+            -LowerLockPaths @(Join-Path $coreRoot 'sources.lock.json') -Names $Names -Rev $Rev -Version $Version
     }
 }
 

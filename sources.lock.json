@@ -1,4 +1,17 @@
 {
+  "Modules": {
+    "PSReadLine": {
+      "Dependencies": {},
+      "Editions": [
+        "Core",
+        "Desktop"
+      ],
+      "ModuleVersion": "2.4.5",
+      "RequireLicenseAcceptance": false,
+      "Sha256": "cb9390e9733208456c234a7971d1ec4a917886c239502aab68f4b71aa4bba235",
+      "Version": "2.4.5"
+    }
+  },
   "Sources": {
     "Neovim": {
       "Repo": "abnertu/orbit.nvim",

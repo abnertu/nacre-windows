@@ -19,6 +19,9 @@
     Sources  = @{
         Neovim = $true
     }
+    Modules  = @{
+        PSReadLine = $true
+    }
     Doctor   = @{
         Commands = @{ nvim = $true; node = $true; pwsh = $true }
     }

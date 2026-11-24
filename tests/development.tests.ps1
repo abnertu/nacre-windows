@@ -11,7 +11,7 @@ function New-TestWorktree {
 Test 'a Development path replaces the archive with a junction to the worktree' {
     $root = New-TestRoot
     $worktree = New-TestWorktree $root
-    Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{ SchemaVersion = 1; Development = @{ Neovim = '$worktree' } }"
+    Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{ SchemaVersion = 1; Development = @{ Neovim = '$worktree' }; Modules = @{ PSReadLine = `$false } }"
     $artifact = Invoke-TestBuild $root
     $external = Read-TestText (Join-Path $artifact 'home\.chezmoiexternal.toml')
     Assert-NoMatch $external 'nvim' 'for a linked source'
@@ -24,7 +24,7 @@ Test 'a Development path replaces the archive with a junction to the worktree' {
 }
 
 Test 'switch never applies an archive through a link and changes nothing' {
-    $root = New-TestMachine
+    $root = New-TestMachine -WithoutRoleModules
     $worktree = New-TestWorktree $root
     New-Item -ItemType Directory -Path (Join-Path $root 'home\.config') | Out-Null
     New-Item -ItemType Junction -Path (Join-Path $root 'home\.config\nvim') -Target $worktree | Out-Null
@@ -39,7 +39,7 @@ Test 'switch never applies an archive through a link and changes nothing' {
 Test 'switch keeps an existing directory where a Development link belongs' {
     $root = New-TestRoot
     $worktree = New-TestWorktree $root
-    Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{ SchemaVersion = 1; Development = @{ Neovim = '$worktree' } }"
+    Set-TestFile (Join-Path $root 'machine\machine.psd1') "@{ SchemaVersion = 1; Development = @{ Neovim = '$worktree' }; Modules = @{ PSReadLine = `$false } }"
     Set-TestFile (Join-Path $root 'home\.config\nvim\init.lua') "-- existing`n"
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('switch', '-Yes')) 'exists\. Move it away'
     Assert-Match (Read-TestText (Join-Path $root 'home\.config\nvim\init.lua')) 'existing'
