@@ -24,6 +24,26 @@ if (Test-Path -LiteralPath $nacreProfileDirectory) {
 
 Remove-Variable -Name nacreProfileDirectory, nacreProfileFile -ErrorAction SilentlyContinue
 
+# nacre runs the machine wrapper from any directory. The checkout is
+# NACRE_DIR, else ~/.config/nacre; the machine is the checkout or its
+# windows/ subdirectory, whichever holds machine.psd1.
+function nacre {
+    $nacreHome = $HOME
+    if ($env:NACRE_WINDOWS_HOME) { $nacreHome = $env:NACRE_WINDOWS_HOME }
+    $checkout = $env:NACRE_DIR
+    if (-not $checkout) { $checkout = Join-Path (Join-Path $nacreHome '.config') 'nacre' }
+    $tried = @($checkout, (Join-Path $checkout 'windows'))
+
+    foreach ($root in $tried) {
+        if (Test-Path -LiteralPath (Join-Path $root 'machine.psd1')) {
+            & (Join-Path $root 'nacre.ps1') @args
+            return
+        }
+    }
+
+    Write-Error "No nacre-windows machine in '$($tried -join "' or '")'. Set NACRE_DIR to the checkout."
+}
+
 # Starship reads ~/.config/starship.toml by default.
 if (Get-Command starship -ErrorAction SilentlyContinue) {
     Invoke-Expression (& starship init powershell)
