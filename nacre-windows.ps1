@@ -41,6 +41,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# PowerShell's own progress bars for web requests leave broken lines; WinGet
+# draws its own progress.
+$ProgressPreference = 'SilentlyContinue'
 
 $coreRoot = $PSScriptRoot
 

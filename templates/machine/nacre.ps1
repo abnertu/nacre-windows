@@ -37,6 +37,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# PowerShell's own progress bars for the GitHub requests leave broken lines
+# behind; WinGet draws its own progress.
+$ProgressPreference = 'SilentlyContinue'
 
 $upgradeSelf = $Command -eq 'upgrade' -and $Names.Count -gt 0 -and $Names[0] -eq 'self'
 

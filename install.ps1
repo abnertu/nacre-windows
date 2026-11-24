@@ -18,6 +18,8 @@
 & {
     Set-StrictMode -Version Latest
     $ErrorActionPreference = 'Stop'
+    # PowerShell's own progress bars for the downloads leave broken lines.
+    $ProgressPreference = 'SilentlyContinue'
 
     function Find-Machine {
         param([string]$Checkout)

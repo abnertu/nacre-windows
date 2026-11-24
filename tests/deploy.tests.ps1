@@ -47,21 +47,28 @@ Test 'a failed package stage stops before the home stage and doctor reports it' 
     Assert-Failure (Invoke-Nw -Root $root -Arguments @('doctor')) 'did not finish'
 }
 
-Test 'plan reports package drift from one winget export and changes nothing' {
-    $settings = "    Role = 'minimal'`n    Packages = @{ 'Fixture.Pinned' = @{ Enable = `$true; Version = '2.0' }; 'Fixture.Missing' = `$true }"
-    $root = New-TestMachine -WithoutRoleModules -Settings $settings
-    $export = Join-Path $root 'export.json'
-    Set-TestFile $export '{"Sources":[{"SourceDetails":{"Name":"winget"},"Packages":[{"PackageIdentifier":"Fixture.Pinned","Version":"1.0"}]}]}'
-    $result = Invoke-Nw -Root $root -Arguments @('plan') -Environment @{ NW_FAKE_WINGET_EXPORT = $export }
+Test 'plan reports package drift from winget export and changes nothing' {
+    $packages = "'Fixture.Pinned' = @{ Enable = `$true; Version = '2.0' }; 'Fixture.Missing' = `$true; 'Fixture.Old' = `$true; 'Fixture.Gone' = @{ Enable = `$true; Version = '3.0' }"
+    $root = New-TestMachine -WithoutRoleModules -Settings "    Role = 'minimal'`n    Packages = @{ $packages }"
+    # Without versions, export lists every matched package. With versions, it
+    # leaves out a package whose installed version the source no longer offers.
+    $present = Join-Path $root 'present.json'
+    Set-TestFile $present '{"Sources":[{"SourceDetails":{"Name":"winget"},"Packages":[{"PackageIdentifier":"Fixture.Pinned"},{"PackageIdentifier":"Fixture.Old"},{"PackageIdentifier":"Fixture.Gone"}]}]}'
+    $versioned = Join-Path $root 'versioned.json'
+    Set-TestFile $versioned '{"Sources":[{"SourceDetails":{"Name":"winget"},"Packages":[{"PackageIdentifier":"Fixture.Pinned","Version":"1.0"}]}]}'
+    $environment = @{ NW_FAKE_WINGET_EXPORT = $present; NW_FAKE_WINGET_EXPORT_VERSIONS = $versioned }
+    $result = Invoke-Nw -Root $root -Arguments @('plan') -Environment $environment
     Assert-Success $result
     Assert-Match $result.Output '~ package Fixture\.Pinned 1\.0, declared 2\.0'
     Assert-Match $result.Output '\+ package Fixture\.Missing \(missing'
+    Assert-Match $result.Output '~ package Fixture\.Gone: the installed version is not the declared 3\.0'
+    Assert-NoMatch $result.Output 'Fixture\.Old'
     Assert-Match $result.Log 'winget export -o'
     Assert-NoMatch $result.Log 'winget configure'
     Assert-Match $result.Log 'chezmoi diff --no-pager'
     Assert-NoMatch $result.Log 'chezmoi apply'
     Assert-True (-not (Test-Path (Join-Path $root 'state\current.json'))) 'Plan recorded an artifact.'
-    Assert-Failure (Invoke-Nw -Root $root -Arguments @('doctor') -Environment @{ NW_FAKE_WINGET_EXPORT = $export }) 'Package drift: \+ package Fixture\.Missing'
+    Assert-Failure (Invoke-Nw -Root $root -Arguments @('doctor') -Environment $environment) 'Package drift: \+ package Fixture\.Missing'
 }
 
 Test 'doctor reports a configuration that changed after the last switch' {

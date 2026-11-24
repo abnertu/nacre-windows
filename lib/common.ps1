@@ -220,17 +220,21 @@ function Invoke-NwNative {
     }
 }
 
-# One `winget export` lists the installed packages that WinGet matches to a
-# source. A DSC test starts one process per package and is much slower.
-# Return the drift lines of the enabled packages, or a Failure message.
-function Get-NwPackageDrift {
-    param([System.Collections.IDictionary]$Config)
+# `winget export` lists the installed packages that WinGet matches to a
+# source; a DSC test starts one process per package and is much slower.
+# With --include-versions, export leaves out a package whose installed
+# version the source no longer offers, so presence uses an export without
+# versions, and only pinned packages need the second export.
+function Get-NwWinGetExport {
+    param([switch]$IncludeVersions)
     $file = Join-Path ([IO.Path]::GetTempPath()) ('nacre-windows-export-' + [guid]::NewGuid().ToString('N') + '.json')
 
     try {
-        & winget export -o $file --include-versions --accept-source-agreements --disable-interactivity *> $null
+        $arguments = @('export', '-o', $file, '--accept-source-agreements', '--disable-interactivity')
+        if ($IncludeVersions) { $arguments += '--include-versions' }
+        & winget @arguments *> $null
         $code = $LASTEXITCODE
-        if (-not (Test-Path -LiteralPath $file)) { return @{ Lines = @(); Failure = "winget export failed with exit code $code." } }
+        if (-not (Test-Path -LiteralPath $file)) { throw "winget export failed with exit code $code." }
         $export = Read-NwJson $file
         $installed = @{}
 
@@ -238,30 +242,54 @@ function Get-NwPackageDrift {
             $name = [string]$source['SourceDetails']['Name']
 
             foreach ($package in @($source['Packages'])) {
-                $installed[("$name|" + $package['PackageIdentifier']).ToLowerInvariant()] = [string]$package['Version']
+                $version = ''
+                if ($package.ContainsKey('Version')) { $version = [string]$package['Version'] }
+                $installed[("$name|" + $package['PackageIdentifier']).ToLowerInvariant()] = $version
             }
         }
 
-        $lines = @()
-
-        foreach ($id in (Get-NwSortedKeys $Config['Packages'])) {
-            $package = $Config['Packages'][$id]
-            if (-not $package['Enable']) { continue }
-            $source = 'winget'
-            if ($package.ContainsKey('Source')) { $source = $package['Source'] }
-            $key = "$source|$id".ToLowerInvariant()
-
-            if (-not $installed.ContainsKey($key)) {
-                $lines += "+ package $id (missing or not matched by WinGet; switch installs it)"
-            } elseif ($package.ContainsKey('Version') -and $package['Version'] -and $installed[$key] -ne $package['Version']) {
-                $lines += "~ package $id $($installed[$key]), declared $($package['Version'])"
-            }
-        }
-
-        return @{ Lines = $lines; Failure = $null }
+        return $installed
     } finally {
         Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
     }
+}
+
+# The drift lines of the enabled packages, or a Failure message.
+function Get-NwPackageDrift {
+    param([System.Collections.IDictionary]$Config)
+    $declared = @()
+
+    foreach ($id in (Get-NwSortedKeys $Config['Packages'])) {
+        $package = $Config['Packages'][$id]
+        if (-not $package['Enable']) { continue }
+        $source = 'winget'
+        if ($package.ContainsKey('Source')) { $source = $package['Source'] }
+        $version = ''
+        if ($package.ContainsKey('Version') -and $package['Version']) { $version = [string]$package['Version'] }
+        $declared += @{ Id = $id; Key = "$source|$id".ToLowerInvariant(); Version = $version }
+    }
+
+    try {
+        $present = Get-NwWinGetExport
+        $versions = @{}
+        if (@($declared | Where-Object { $_.Version }).Count -gt 0) { $versions = Get-NwWinGetExport -IncludeVersions }
+    } catch {
+        return @{ Lines = @(); Failure = $_.Exception.Message }
+    }
+
+    $lines = @()
+
+    foreach ($package in $declared) {
+        if (-not $present.ContainsKey($package.Key)) {
+            $lines += "+ package $($package.Id) (missing or not matched by WinGet; switch installs it)"
+        } elseif ($package.Version -and -not $versions.ContainsKey($package.Key)) {
+            $lines += "~ package $($package.Id): the installed version is not the declared $($package.Version)"
+        } elseif ($package.Version -and $versions[$package.Key] -ne $package.Version) {
+            $lines += "~ package $($package.Id) $($versions[$package.Key]), declared $($package.Version)"
+        }
+    }
+
+    return @{ Lines = $lines; Failure = $null }
 }
 
 function Test-NwCommand {
