@@ -5,6 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-25
+
+### Fixed
+
+- `plan` and `doctor` confirm each package that `winget export` leaves out with `winget list`, so installed packages that export does not match, such as Node.js LTS or WezTerm, are no longer reported as missing.
+
 ## [0.1.3] - 2026-11-25
 
 ### Fixed
@@ -44,7 +50,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `lock core`; run `upgrade self`.
 
-[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.3...HEAD
+[Unreleased]: https://github.com/abnertu/nacre-windows/compare/0.1.4...HEAD
+[0.1.4]: https://github.com/abnertu/nacre-windows/compare/0.1.3...0.1.4
 [0.1.3]: https://github.com/abnertu/nacre-windows/compare/0.1.2...0.1.3
 [0.1.2]: https://github.com/abnertu/nacre-windows/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/abnertu/nacre-windows/compare/0.1.0...0.1.1
