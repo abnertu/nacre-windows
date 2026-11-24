@@ -31,11 +31,12 @@
 - Run throwaway tests freely to check your work.
 - Keep throwaway tests out of the repo unless they meet the bar above.
 - Never touch the live home, registry, PATH, packages or `%LOCALAPPDATA%\nacre-windows` in a test. Use temporary roots and fake native commands.
-- Run the suite under both hosts, then check whitespace:
+- Run the suite under both hosts, then check the format and whitespace:
 
   ```powershell
   pwsh -NoProfile -File tests/run-tests.ps1
   powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/run-tests.ps1
+  pwsh -NoProfile -File scripts/format.ps1 -Check
   git diff --check
   ```
 
@@ -103,6 +104,9 @@
 ## Code
 
 - Support Windows PowerShell 5.1 and PowerShell 7. A new Windows host has only 5.1.
+- Name files in lowercase kebab-case, such as `run-tests.ps1`. Keep chezmoi source attributes, such as `dot_`, and reserved tool filenames.
+- Format PowerShell files with `scripts/format.ps1`. It needs PSScriptAnalyzer 1.25.0.
+- Edit formatter rules in `PSScriptAnalyzerSettings.psd1`. Edit blank-line rules in `scripts/format.ps1`.
 - Keep each `.ps1` and `.psd1` file ASCII with LF line endings. Windows PowerShell 5.1 reads a BOM-less script as the ANSI code page.
 - Hash JSON from `ConvertTo-NwJson` only. `ConvertTo-Json` output differs between 5.1 and 7, so artifact identifiers would differ.
 - Keep the build static. Read host state only in `switch` and `doctor`.
