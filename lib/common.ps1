@@ -266,7 +266,9 @@ function Update-NwProcessPath {
 function Save-NwGitHubArchive {
     param([string]$Repo, [string]$Rev, [string]$OutFile)
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    # The artifact keeps Get-NwArchiveUrl; only the request honors the test seam.
     $uri = Get-NwArchiveUrl -Repo $Repo -Rev $Rev
+    if ($env:NACRE_WINDOWS_GITHUB_ARCHIVE) { $uri = $env:NACRE_WINDOWS_GITHUB_ARCHIVE.TrimEnd('/') + "/$Repo/archive/$Rev.tar.gz" }
     $progress = $ProgressPreference
     $ProgressPreference = 'SilentlyContinue'
 
@@ -286,7 +288,9 @@ function Resolve-NwGitHubRev {
     param([string]$Repo, [string]$Ref = 'HEAD')
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $headers = @{ Accept = 'application/vnd.github.sha'; 'User-Agent' = 'nacre-windows' }
-    $response = Invoke-WebRequest -UseBasicParsing -Uri "https://api.github.com/repos/$Repo/commits/$Ref" -Headers $headers
+    $api = 'https://api.github.com'
+    if ($env:NACRE_WINDOWS_GITHUB_API) { $api = $env:NACRE_WINDOWS_GITHUB_API.TrimEnd('/') }
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "$api/repos/$Repo/commits/$Ref" -Headers $headers
     $content = $response.Content
     # PowerShell 7 returns bytes for a media type that it does not know.
     if ($content -is [byte[]]) { $content = [System.Text.Encoding]::ASCII.GetString($content) }

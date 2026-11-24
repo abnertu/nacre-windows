@@ -95,7 +95,7 @@ function New-TestMachine {
 # Run a script in a child process of this host with the test environment.
 # Returns @{ ExitCode; Output; Log }.
 function Invoke-TestScript {
-    param([string]$Root, [string]$Script, [string[]]$Arguments = @(), [hashtable]$Environment = @{})
+    param([string]$Root, [string]$Script, [string[]]$Arguments = @(), [hashtable]$Environment = @{}, [string[]]$InputText)
 
     $variables = @{
         NACRE_WINDOWS_STATE = (Join-Path $Root 'state')
@@ -118,7 +118,13 @@ function Invoke-TestScript {
     $ErrorActionPreference = 'Continue'
 
     try {
-        $output = & $script:Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
+        if ($PSBoundParameters.ContainsKey('InputText')) {
+            # Piped lines become the child's stdin; an empty array is end of input.
+            $output = $InputText | & $script:Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
+        } else {
+            $output = & $script:Shell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $Script @Arguments 2>&1 | Out-String
+        }
+
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $preference
@@ -227,4 +233,89 @@ function New-TestModulePackage {
     $path = Join-Path (Join-Path $Gallery $Id) "$File.nupkg"
     New-TestZip -Path $path -Entries $entries
     return $path
+}
+
+# A local GitHub stand-in on http://localhost:<port>/ in its own runspace.
+# Routes map a request path to a JSON string or to archive bytes; other paths
+# answer 404. Every request path lands in Log.
+function Start-TestWeb {
+    param([hashtable]$Routes)
+    $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $probe.Start()
+    $port = ([Net.IPEndPoint]$probe.LocalEndpoint).Port
+    $probe.Stop()
+    $listener = [Net.HttpListener]::new()
+    $listener.Prefixes.Add("http://localhost:$port/")
+    $listener.Start()
+    $log = [Collections.Concurrent.ConcurrentQueue[string]]::new()
+    $shared = [hashtable]::Synchronized($Routes)
+    $runner = [PowerShell]::Create()
+
+    [void]$runner.AddScript({
+            param($Listener, $Routes, $Log)
+
+            while ($Listener.IsListening) {
+                try { $context = $Listener.GetContext() } catch { break }
+                $path = $context.Request.Url.AbsolutePath
+                $Log.Enqueue($path)
+                $body = $Routes[$path]
+                $response = $context.Response
+
+                if ($null -eq $body) {
+                    $response.StatusCode = 404
+                    $bytes = [Text.Encoding]::UTF8.GetBytes('{"message":"Not Found"}')
+                } elseif ($body -is [byte[]]) {
+                    $bytes = $body
+                } else {
+                    $bytes = [Text.Encoding]::UTF8.GetBytes([string]$body)
+                }
+
+                $response.ContentLength64 = $bytes.Length
+                $response.OutputStream.Write($bytes, 0, $bytes.Length)
+                $response.Close()
+            }
+        }).AddArgument($listener).AddArgument($shared).AddArgument($log)
+
+    $handle = $runner.BeginInvoke()
+    $url = "http://localhost:$port"
+
+    return @{
+        Url         = $url
+        Routes      = $shared
+        Log         = $log
+        Listener    = $listener
+        Runner      = $runner
+        Handle      = $handle
+        Environment = @{ NACRE_WINDOWS_GITHUB_API = $url; NACRE_WINDOWS_GITHUB_ARCHIVE = $url }
+    }
+}
+
+function Stop-TestWeb {
+    param($Web)
+    $Web.Listener.Stop()
+    $Web.Listener.Close()
+    $Web.Runner.Dispose()
+}
+
+# A tar.gz of the working-tree core under one top directory, and its hash.
+function New-TestCoreArchive {
+    param([string]$Extra = '')
+    $root = Join-Path $script:TempRoot ('core-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
+    $top = Join-Path $root 'nacre-windows-fixture'
+    New-Item -ItemType Directory -Force -Path $top | Out-Null
+
+    foreach ($item in Get-ChildItem -LiteralPath $script:CoreRoot -Force) {
+        if (@('.git', '.blueprints') -contains $item.Name) { continue }
+        Copy-Item -LiteralPath $item.FullName -Destination $top -Recurse -Force
+    }
+
+    if ($Extra) { Set-TestFile (Join-Path $top 'extra.txt') $Extra }
+    $archive = Join-Path $root 'core.tar.gz'
+    & tar.exe -czf $archive -C $root 'nacre-windows-fixture'
+    if ($LASTEXITCODE -ne 0) { throw "tar failed with exit code $LASTEXITCODE." }
+
+    return @{
+        Bytes  = [IO.File]::ReadAllBytes($archive)
+        Sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+    }
 }

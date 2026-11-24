@@ -243,33 +243,3 @@ Test 'the machine wrapper forwards an explicit Gallery module version' {
     $similar = 'F' + [char]0x00AD + 'oo'
     Assert-Failure (Invoke-TestScript -Root $root -Script $wrapper -Arguments @('lock', $similar, '-OverrideCore', $script:CoreRoot) -Environment @{ NACRE_WINDOWS_GALLERY = $gallery }) 'not an enabled source or module'
 }
-
-Test 'lock core preserves other values and rejects extra arguments' {
-    $timestamp = '2026-01-01T03:04:05+05:30'
-    $lock = '{"Sources":{},"Modules":{"Foo":{"Version":"1.0"}},"Metadata":{"Recorded":"' + $timestamp + '"}}'
-    $root = New-TestMachine -Lock $lock
-    $machine = Join-Path $root 'machine'
-    Copy-Item -LiteralPath (Join-Path $script:CoreRoot 'templates\machine\nacre.ps1') -Destination (Join-Path $machine 'nacre.ps1')
-    $fixture = Join-Path $machine 'lock-fixture.ps1'
-
-    Set-TestFile $fixture @'
-function Invoke-WebRequest {
-    param([switch]$UseBasicParsing, [string]$Uri, [hashtable]$Headers, [string]$OutFile)
-    if ($OutFile) {
-        [IO.File]::WriteAllText($OutFile, 'fixture archive')
-    } else {
-        [pscustomobject]@{ Content = 'cccccccccccccccccccccccccccccccccccccccc' }
-    }
-}
-& (Join-Path $PSScriptRoot 'nacre.ps1') @args
-exit $LASTEXITCODE
-'@
-
-    Assert-Failure (Invoke-TestScript -Root $root -Script $fixture -Arguments @('lock', 'core', 'Foo')) 'takes no additional names'
-    Assert-Success (Invoke-TestScript -Root $root -Script $fixture -Arguments @('lock', 'core'))
-    $path = Join-Path $machine 'nacre-windows.lock.json'
-    Assert-True ([IO.File]::ReadAllText($path).Contains($timestamp)) 'lock core rewrote a timestamp string.'
-    $newLock = Read-TestLock $root
-    Assert-True ($newLock['Core']['Rev'] -eq ('c' * 40)) 'lock core did not write the new pin.'
-    Assert-True ($newLock['Sources'].Count -eq 0 -and $newLock['Modules']['Foo']['Version'] -eq '1.0') 'lock core changed Sources or Modules.'
-}

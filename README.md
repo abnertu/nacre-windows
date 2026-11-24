@@ -21,10 +21,10 @@ To start a machine repository:
 
 1. Copy `templates/machine` into a Git repository.
 2. Edit `machine.psd1`. Remove each setting that you keep at its default.
-3. Pin the core:
+3. Pin the newest core release. This also plans and asks before it switches:
 
    ```powershell
-   .\nacre.ps1 lock core
+   .\nacre.ps1 upgrade self
    ```
 
 On a new host, clone the machine repository and run `.\nacre.ps1 switch`.
@@ -55,10 +55,14 @@ Preview the changes, then apply them:
 | `lock [<Name>...]` | Pins sources and modules. A source gets the newest commit of its default branch. A module gets the newest stable Gallery version. |
 | `lock <Source> -Rev <commit>` | Pins one source to a commit. |
 | `lock <Module> -Version <version>` | Pins one module to a Gallery version. |
-| `lock core` | Pins the core and keeps the other pins. Only the machine wrapper runs it. |
+| `upgrade self` | Pins the newest core on the lock's channel, then plans, asks and switches under it. Only the machine wrapper runs it. |
+| `upgrade self -Ref <branch>` | Follows a branch, such as `main`. `-Release` returns to the newest release. |
+| `upgrade self -Rev <commit>` | Pins one commit and keeps the channel. |
 
 `-Yes` accepts the WinGet configuration agreement, which each command asks for. In `switch` and `upgrade system`, it also applies home files without prompts.
-To preview core changes, add `-OverrideCore <path>` with a core checkout. Then publish the changes and run `lock core`.
+To preview core changes, add `-OverrideCore <path>` with a core checkout. Then publish the changes and run `upgrade self`.
+
+`upgrade self` reads the channel from `Core.Ref` in `nacre-windows.lock.json`. Without `Ref`, it follows the newest release and refuses a pin that is ahead of that release. It prints the old and the new revision. It runs `plan -Yes`, which accepts the WinGet agreement for the read-only test. Then it switches with `-Yes`, after a question in a console, or stops after the plan.
 
 `plan` and `doctor` run `winget configure test`. Its first run can install the WinGet DSC processor.
 
@@ -166,7 +170,7 @@ Add custom PowerShell 7 installations to PATH before you run these commands.
 ### Adopt a new core
 
 The machine wrapper `nacre.ps1` is a copy of `templates/machine/nacre.ps1`. The core cannot update it.
-When you adopt a core with module pins, copy its wrapper into the machine repository first. An old wrapper drops `Modules` on `lock core`.
+When you adopt a core, copy its wrapper into the machine repository first. An old wrapper has no `upgrade self`.
 Get the wrapper from one of these places:
 
 - `%LOCALAPPDATA%\nacre-windows\core\<rev>\templates\machine\nacre.ps1`, after a run of the pinned core.

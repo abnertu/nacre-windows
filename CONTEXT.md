@@ -42,7 +42,7 @@ After the PATH refresh, `switch` checks again. It sets `CurrentUser` to `RemoteS
 
 ## Pins
 
-The machine wrapper pins the core in `nacre-windows.lock.json` with `lock core`. The core pins its default sources and modules in `sources.lock.json`.
+The machine wrapper pins the core in `nacre-windows.lock.json` with `upgrade self`. It verifies each cached core against the pin before it runs it. The core pins its default sources and modules in `sources.lock.json`.
 
 - A source pin holds a commit and the SHA-256 of its GitHub archive. The machine lock wins for a source with the same `Repo`.
 - A module pin holds a Gallery version, its `ModuleVersion`, the SHA-256 of the package, its editions, its license flag and its dependency ranges. The machine lock wins for the same module Id.
