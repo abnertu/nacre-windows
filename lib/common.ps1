@@ -254,6 +254,20 @@ function Get-NwWinGetExport {
     }
 }
 
+# APPINSTALLER_CLI_ERROR_NO_APPLICATIONS_FOUND (0x8A150014): `winget list`
+# found no installed package for the query.
+$script:NwWinGetNoPackage = -1978335212
+
+# Whether WinGet finds one installed package. Export does not match some
+# installed packages that `winget list` and the DSC Package resource match.
+function Test-NwWinGetInstalled {
+    param([string]$Id, [string]$Source)
+    & winget list --id $Id --exact --source $Source --accept-source-agreements --disable-interactivity *> $null
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if ($LASTEXITCODE -eq $script:NwWinGetNoPackage) { return $false }
+    throw "winget list --id $Id failed with exit code $LASTEXITCODE."
+}
+
 # The drift lines of the enabled packages, or a Failure message.
 function Get-NwPackageDrift {
     param([System.Collections.IDictionary]$Config)
@@ -266,13 +280,20 @@ function Get-NwPackageDrift {
         if ($package.ContainsKey('Source')) { $source = $package['Source'] }
         $version = ''
         if ($package.ContainsKey('Version') -and $package['Version']) { $version = [string]$package['Version'] }
-        $declared += @{ Id = $id; Key = "$source|$id".ToLowerInvariant(); Version = $version }
+        $declared += @{ Id = $id; Source = $source; Key = "$source|$id".ToLowerInvariant(); Version = $version }
     }
 
     try {
         $present = Get-NwWinGetExport
         $versions = @{}
         if (@($declared | Where-Object { $_.Version }).Count -gt 0) { $versions = Get-NwWinGetExport -IncludeVersions }
+        $missing = @{}
+
+        foreach ($package in $declared) {
+            if (-not $present.ContainsKey($package.Key) -and -not (Test-NwWinGetInstalled -Id $package.Id -Source $package.Source)) {
+                $missing[$package.Key] = $true
+            }
+        }
     } catch {
         return @{ Lines = @(); Failure = $_.Exception.Message }
     }
@@ -280,8 +301,10 @@ function Get-NwPackageDrift {
     $lines = @()
 
     foreach ($package in $declared) {
-        if (-not $present.ContainsKey($package.Key)) {
-            $lines += "+ package $($package.Id) (missing or not matched by WinGet; switch installs it)"
+        if ($missing.ContainsKey($package.Key)) {
+            $lines += "+ package $($package.Id) (missing; switch installs it)"
+        } elseif ($package.Version -and -not $present.ContainsKey($package.Key)) {
+            $lines += "~ package $($package.Id): WinGet cannot read the installed version; declared $($package.Version)"
         } elseif ($package.Version -and -not $versions.ContainsKey($package.Key)) {
             $lines += "~ package $($package.Id): the installed version is not the declared $($package.Version)"
         } elseif ($package.Version -and $versions[$package.Key] -ne $package.Version) {

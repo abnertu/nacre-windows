@@ -48,7 +48,7 @@ Test 'a failed package stage stops before the home stage and doctor reports it' 
 }
 
 Test 'plan reports package drift from winget export and changes nothing' {
-    $packages = "'Fixture.Pinned' = @{ Enable = `$true; Version = '2.0' }; 'Fixture.Missing' = `$true; 'Fixture.Old' = `$true; 'Fixture.Gone' = @{ Enable = `$true; Version = '3.0' }"
+    $packages = "'Fixture.Pinned' = @{ Enable = `$true; Version = '2.0' }; 'Fixture.Missing' = `$true; 'Fixture.Old' = `$true; 'Fixture.Gone' = @{ Enable = `$true; Version = '3.0' }; 'Fixture.Unexported' = `$true"
     $root = New-TestMachine -WithoutRoleModules -Settings "    Role = 'minimal'`n    Packages = @{ $packages }"
     # Without versions, export lists every matched package. With versions, it
     # leaves out a package whose installed version the source no longer offers.
@@ -56,13 +56,16 @@ Test 'plan reports package drift from winget export and changes nothing' {
     Set-TestFile $present '{"Sources":[{"SourceDetails":{"Name":"winget"},"Packages":[{"PackageIdentifier":"Fixture.Pinned"},{"PackageIdentifier":"Fixture.Old"},{"PackageIdentifier":"Fixture.Gone"}]}]}'
     $versioned = Join-Path $root 'versioned.json'
     Set-TestFile $versioned '{"Sources":[{"SourceDetails":{"Name":"winget"},"Packages":[{"PackageIdentifier":"Fixture.Pinned","Version":"1.0"}]}]}'
-    $environment = @{ NW_FAKE_WINGET_EXPORT = $present; NW_FAKE_WINGET_EXPORT_VERSIONS = $versioned }
+    # winget list matches an installed package that export leaves out.
+    $environment = @{ NW_FAKE_WINGET_EXPORT = $present; NW_FAKE_WINGET_EXPORT_VERSIONS = $versioned; NW_FAKE_WINGET_INSTALLED = 'Fixture.Unexported' }
     $result = Invoke-Nw -Root $root -Arguments @('plan') -Environment $environment
     Assert-Success $result
     Assert-Match $result.Output '~ package Fixture\.Pinned 1\.0, declared 2\.0'
     Assert-Match $result.Output '\+ package Fixture\.Missing \(missing'
     Assert-Match $result.Output '~ package Fixture\.Gone: the installed version is not the declared 3\.0'
     Assert-NoMatch $result.Output 'Fixture\.Old'
+    Assert-NoMatch $result.Output 'Fixture\.Unexported'
+    Assert-Match $result.Log 'winget list --id Fixture\.Unexported --exact --source winget'
     Assert-Match $result.Log 'winget export -o'
     Assert-NoMatch $result.Log 'winget configure'
     Assert-Match $result.Log 'chezmoi diff --no-pager'
