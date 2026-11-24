@@ -84,6 +84,67 @@ function Get-NwCommandIssues {
     return , $issues
 }
 
+function Get-NwDefaultModulePath {
+    param([string]$Executable)
+    # Clear the inherited path before PowerShell computes its startup defaults.
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $Executable
+    $start.Arguments = '-NoProfile -NonInteractive -Command "[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($env:PSModulePath))"'
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    [void]$start.EnvironmentVariables.Remove('PSModulePath')
+    $process = [Diagnostics.Process]::Start($start)
+
+    try {
+        $errors = $process.StandardError.ReadToEndAsync()
+        $output = $process.StandardOutput.ReadToEnd()
+        $process.WaitForExit()
+
+        if ($process.ExitCode -ne 0 -or $errors.GetAwaiter().GetResult()) {
+            throw 'Could not read the default module path.'
+        }
+
+        return [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String($output.Trim()))
+    } finally {
+        $process.Dispose()
+    }
+}
+
+function Get-NwModulePathIssues {
+    param($Build, [string]$Documents)
+    if ((Test-NwAlternateHome) -or -not $Documents) { return }
+    $editions = @($Build.Modules.Values | ForEach-Object { $_['Editions'] })
+    $declaredDocuments = Get-NwDocumentsDirectory
+
+    foreach ($edition in @('Desktop', 'Core')) {
+        if ($edition -notin $editions) { continue }
+        $executable = Get-NwPolicyExecutable $edition
+        if (-not $executable) { continue }
+
+        try {
+            $entries = (Get-NwDefaultModulePath $executable) -split [IO.Path]::PathSeparator
+        } catch {
+            "Could not check the default PSModulePath for PowerShell $edition."
+            continue
+        }
+
+        $folder = $script:NwModuleEditionFolders[$edition]
+        $root = Join-Path (Join-Path $Documents $folder) 'Modules'
+        $declaredRoot = Join-Path (Join-Path $declaredDocuments $folder) 'Modules'
+
+        $matched = $entries | Where-Object {
+            $entry = $_.Trim().Replace('/', '\').TrimEnd('\')
+
+            [string]::Equals($entry, $root, [StringComparison]::OrdinalIgnoreCase) -or
+            [string]::Equals($entry, $declaredRoot, [StringComparison]::OrdinalIgnoreCase)
+        } | Select-Object -First 1
+
+        if (-not $matched) { "PowerShell $edition default PSModulePath does not include '$root'." }
+    }
+}
+
 function Invoke-NwDoctor {
     param([string]$CoreRoot, [string]$MachineRoot, [switch]$Yes)
     $issues = @()
@@ -125,6 +186,7 @@ function Invoke-NwDoctor {
     $issues += Get-NwSourceIssues $build
     $modules = Get-NwModuleState $build
     $issues += $modules.Blocking
+    $issues += Get-NwModulePathIssues -Build $build -Documents $modules.Documents
     foreach ($warning in $modules.Warnings) { Write-Warning $warning }
 
     foreach ($install in $modules.Installs) {

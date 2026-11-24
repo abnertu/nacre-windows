@@ -78,3 +78,8 @@ Test 'Modules rejects an unknown key, a missing Enable and a reserved or invalid
     $root = New-TestMachine -Settings "    Modules = @{ 'COM10' = `$false; 'Console' = `$false; 'Core.Utils' = `$false }"
     Invoke-TestBuild $root | Out-Null
 }
+
+Test 'Sources reserves core without regard to case' {
+    $root = New-TestMachine -Settings '    Sources = @{ cOrE = $false }'
+    Assert-Failure (Invoke-Nw -Root $root -Arguments @('build')) 'reserved source name'
+}

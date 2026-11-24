@@ -102,6 +102,7 @@ Add this line to `$PROFILE.CurrentUserCurrentHost` of each PowerShell host:
 
 A source is a config directory from one GitHub commit. The `minimal` role enables Neovim, and the `workstation` role adds WezTerm.
 `sources.lock.json` pins the core defaults. `nacre-windows.lock.json` in the machine repository wins over them.
+The source name `core` is reserved. Rename any source that uses it, including its lock and Development entries.
 A source with another `Repo` needs a machine pin: run `.\nacre.ps1 lock <Source>`.
 
 The archive owns its whole directory. chezmoi removes other files there, such as a `.git` directory.
@@ -145,6 +146,7 @@ Core modules go to `Documents\PowerShell\Modules`. Desktop modules go to `Docume
 - A home file or source target overlaps a managed module directory.
 
 `plan` lists missing versions and reports module issues. `doctor` reports missing versions and blocking issues.
+For installed editions with managed modules, `doctor` checks the module root against the default `PSModulePath`.
 Both warn about stale staging and higher installed versions. `switch` removes its stale staging directories.
 
 ### Module execution policy

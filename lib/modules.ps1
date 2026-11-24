@@ -1,6 +1,8 @@
 # Evaluate CurrentUser module destinations before any deployment changes.
 Set-StrictMode -Version Latest
 
+$script:NwModuleEditionFolders = @{ Core = 'PowerShell'; Desktop = 'WindowsPowerShell' }
+
 $script:NwStagingName = '^[0-9]+(\.[0-9]+){1,3}\.tmp-[0-9a-f]{32}\z'
 
 function Get-NwDocumentsDirectory {
@@ -155,13 +157,11 @@ function Get-NwModuleState {
         return $state
     }
 
-    $folders = @{ Core = 'PowerShell'; Desktop = 'WindowsPowerShell' }
-
     foreach ($id in (Get-NwSortedKeys $Build.Modules)) {
         $pin = $Build.Modules[$id]
 
         foreach ($edition in $pin.Editions) {
-            $parts = @($folders[$edition], 'Modules', $id, $pin.ModuleVersion)
+            $parts = @($script:NwModuleEditionFolders[$edition], 'Modules', $id, $pin.ModuleVersion)
             $moduleDirectory = [IO.Path]::Combine($state.Documents, $parts[0], $parts[1], $id)
             $versionPath = [IO.Path]::Combine($moduleDirectory, $pin.ModuleVersion)
 

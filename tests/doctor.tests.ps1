@@ -16,3 +16,29 @@ Test 'environment checks report missing, repeated, empty and shadowed variables'
     Assert-NoMatch $issues "'TEMP' is defined in both" 'for a name that Windows sets in both scopes'
     Assert-NoMatch $issues 'C:\\Other' 'for a healthy entry'
 }
+
+Test 'doctor checks the default path of installed editions with managed modules' {
+    & {
+        $script:NwModuleEditionFolders = @{ Core = 'PowerShell'; Desktop = 'WindowsPowerShell' }
+
+        function Test-NwAlternateHome { return $alternate }
+
+        function Get-NwDocumentsDirectory { return 'C:\Documents' }
+
+        function Get-NwPolicyExecutable { param($Edition) return $Edition }
+
+        function Get-NwDefaultModulePath {
+            param($Executable)
+            if ($Executable -eq 'Desktop') { return 'c:/documents/WindowsPowerShell/Modules/;C:\Other' }
+            return 'C:\Other'
+        }
+
+        $alternate = $false
+        $build = @{ Modules = @{ Fixture = @{ Editions = @('Desktop', 'Core') } } }
+        $issues = @(Get-NwModulePathIssues -Build $build -Documents 'C:\Documents')
+        Assert-True ($issues.Count -eq 1) 'Expected one missing module root.'
+        Assert-Match ($issues -join '') 'PowerShell Core default PSModulePath does not include'
+        $alternate = $true
+        Assert-True (@(Get-NwModulePathIssues -Build $build -Documents 'C:\Documents').Count -eq 0) 'The alternate home probed the live editions.'
+    }
+}

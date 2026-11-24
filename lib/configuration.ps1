@@ -212,6 +212,7 @@ function Assert-NwConfiguration {
     foreach ($name in $Config['Sources'].Keys) {
         $source = $Config['Sources'][$name]
         if ($name -notmatch '^[A-Za-z][A-Za-z0-9]*$') { $errors.Add("Sources.$name must be a name of letters and digits.") }
+        if ([string]::Equals($name, 'core', [StringComparison]::OrdinalIgnoreCase)) { $errors.Add("Sources.$name uses the reserved source name 'core'.") }
         if (-not $source.ContainsKey('Enable')) { $errors.Add("Sources.$name needs Enable.") }
         if (-not $source['Enable']) { continue }
 
