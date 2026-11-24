@@ -34,8 +34,8 @@
 - Run the suite under both hosts, then check whitespace:
 
   ```powershell
-  pwsh -NoProfile -File tests/Run-Tests.ps1
-  powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/Run-Tests.ps1
+  pwsh -NoProfile -File tests/run-tests.ps1
+  powershell.exe -NoProfile -ExecutionPolicy Bypass -File tests/run-tests.ps1
   git diff --check
   ```
 

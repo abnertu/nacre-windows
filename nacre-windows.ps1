@@ -36,7 +36,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $coreRoot = $PSScriptRoot
-foreach ($name in @('Common', 'Configuration', 'Lock', 'Build', 'Deploy', 'Doctor')) {
+foreach ($name in @('common', 'configuration', 'lock', 'build', 'deploy', 'doctor')) {
     . (Join-Path (Join-Path $coreRoot 'lib') "$name.ps1")
 }
 

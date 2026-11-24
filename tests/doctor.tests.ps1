@@ -1,8 +1,8 @@
 # Environment checks take the variables as input, so they run without the
 # live registry.
 
-. (Join-Path $script:CoreRoot 'lib\Common.ps1')
-. (Join-Path $script:CoreRoot 'lib\Doctor.ps1')
+. (Join-Path $script:CoreRoot 'lib\common.ps1')
+. (Join-Path $script:CoreRoot 'lib\doctor.ps1')
 
 Test 'environment checks report missing, repeated, empty and shadowed variables' {
     $exists = { param($Path) $Path -notlike '*missing*' }

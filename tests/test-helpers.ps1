@@ -1,4 +1,4 @@
-# Test helpers for Run-Tests.ps1.
+# Test helpers for run-tests.ps1.
 Set-StrictMode -Version Latest
 
 function Test {

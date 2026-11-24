@@ -7,7 +7,7 @@ param([string[]]$Names = @())
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $coreRoot = Split-Path -Parent $PSScriptRoot
-foreach ($name in @('Common', 'Configuration', 'Lock')) {
+foreach ($name in @('common', 'configuration', 'lock')) {
     . (Join-Path (Join-Path $coreRoot 'lib') "$name.ps1")
 }
 

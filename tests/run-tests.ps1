@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# Run every tests/*.Tests.ps1 file. Each test drives the real entry point in
+# Run every tests/*.tests.ps1 file. Each test drives the real entry point in
 # a child process of the same PowerShell host, with fake winget and chezmoi
 # commands and temporary state and home roots. No test touches the live
 # home, registry or packages.
@@ -15,11 +15,11 @@ $script:TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('nacre-windows-t
 $script:Passed = 0
 $script:Failed = @()
 
-. (Join-Path $PSScriptRoot 'TestHelpers.ps1')
+. (Join-Path $PSScriptRoot 'test-helpers.ps1')
 
 New-Item -ItemType Directory -Path $script:TempRoot | Out-Null
 try {
-    foreach ($file in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.Tests.ps1' | Sort-Object Name) {
+    foreach ($file in Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.tests.ps1' | Sort-Object Name) {
         $script:CurrentFile = $file.BaseName
         . $file.FullName
     }

@@ -4,7 +4,7 @@ nacre-windows evaluates machine policy into a fixed artifact. `switch` converges
 
 | Boundary | Owner | Contract |
 | --- | --- | --- |
-| Public policy | `defaults.psd1`, `lib/Configuration.ps1` | Settings, types and defaults |
+| Public policy | `defaults.psd1`, `lib/configuration.ps1` | Settings, types and defaults |
 | Role | `roles/` | `minimal` and `workstation` baselines; `workstation` extends `minimal` |
 | Machine | A separate repository based on `templates/machine/` | Role, overrides, personal home files and pins |
 | Packages | WinGet DSC v3 | Presence, optional versions, holds and upgrades with `update` |
