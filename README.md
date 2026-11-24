@@ -83,7 +83,7 @@ To preview core changes, add `-OverrideCore <path>` with a core checkout. Then p
 
 `upgrade self` reads the channel from `Core.Ref` in `nacre-windows.lock.json`. Without `Ref`, it follows the newest release and refuses a pin that is ahead of that release. It prints the old and the new revision. It runs `plan -Yes`, which accepts the WinGet agreement for the read-only test. Then it switches with `-Yes`, after a question in a console, or stops after the plan.
 
-`plan` and `doctor` run `winget configure test`. Its first run can install the WinGet DSC processor.
+`plan` and `doctor` compare the declared packages with one `winget export`: they report each missing package and each pinned version that differs. Only `switch` runs the WinGet DSC configuration, whose first run can install the WinGet DSC processor.
 
 ## Configuration
 

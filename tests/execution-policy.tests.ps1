@@ -139,6 +139,8 @@ Test 'plan and doctor report policy changes and switch stops at a policy blocker
 
     function Invoke-NwNative { $script:NwExitCode = 0 }
 
+    function Get-NwPackageDrift { return @{ Lines = @(); Failure = $null } }
+
     function Write-Host { param($Message) $messages.Add($Message) }
 
     function Write-Warning { param($Message) $messages.Add($Message) }

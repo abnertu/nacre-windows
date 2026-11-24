@@ -129,19 +129,30 @@
             Write-Warning "$own differs from the $tag template. Copy $repo/templates/machine/nacre.ps1 at $tag over it."
         }
 
-        $arguments = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned')
-        $nonInteractive = [Console]::IsInputRedirected -or @([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni(n(t(e(r(a(c(t(i(v(e)?)?)?)?)?)?)?)?)?)?$' }).Count -gt 0
-        if ($nonInteractive) { $arguments += '-NonInteractive' }
-        $arguments += @('-File', $wrapper, 'upgrade', 'self', '-MachineRoot', $machine)
-        if ($env:NACRE_YES -eq '1') { $arguments += '-Yes' }
-        # The console host, also under the ISE: pwsh for 7, powershell.exe for 5.1.
-        $shell = Join-Path $PSHOME 'powershell.exe'
-        if ($PSVersionTable.PSEdition -eq 'Core') { $shell = (Get-Process -Id $PID).Path }
-        # Start-Process keeps the wrapper on this console under `irm | iex`, so
-        # WinGet keeps its progress, colors and encoding.
-        $quoted = @($arguments | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } })
-        $process = Start-Process -FilePath $shell -ArgumentList $quoted -NoNewWindow -Wait -PassThru
-        if ($process.ExitCode -ne 0) { throw "upgrade self failed with exit code $($process.ExitCode)." }
+        $policy = [string](Get-ExecutionPolicy)
+
+        if (@('Unrestricted', 'RemoteSigned', 'Bypass') -contains $policy) {
+            # In this process, as the nacre profile function runs it: WinGet keeps
+            # this console's mode, so its progress, colors and encoding work.
+            $wrapperArguments = @{ Command = 'upgrade'; Names = @('self'); MachineRoot = $machine }
+            if ($env:NACRE_YES -eq '1') { $wrapperArguments['Yes'] = $true }
+            & $wrapper @wrapperArguments
+            if ($LASTEXITCODE -ne 0) { throw "upgrade self failed with exit code $LASTEXITCODE." }
+        } else {
+            # The policy blocks script files here; run a RemoteSigned process.
+            $arguments = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned')
+            $nonInteractive = [Console]::IsInputRedirected -or @([Environment]::GetCommandLineArgs() | Where-Object { $_ -match '^-noni(n(t(e(r(a(c(t(i(v(e)?)?)?)?)?)?)?)?)?)?$' }).Count -gt 0
+            if ($nonInteractive) { $arguments += '-NonInteractive' }
+            $arguments += @('-File', $wrapper, 'upgrade', 'self', '-MachineRoot', $machine)
+            if ($env:NACRE_YES -eq '1') { $arguments += '-Yes' }
+            # The console host, also under the ISE: pwsh for 7, powershell.exe for 5.1.
+            $shell = Join-Path $PSHOME 'powershell.exe'
+            if ($PSVersionTable.PSEdition -eq 'Core') { $shell = (Get-Process -Id $PID).Path }
+            $quoted = @($arguments | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } })
+            $process = Start-Process -FilePath $shell -ArgumentList $quoted -NoNewWindow -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "upgrade self failed with exit code $($process.ExitCode)." }
+        }
+
         Write-Host "nacre-windows $tag is ready in $machine."
     } catch {
         Write-Error -ErrorRecord $_ -ErrorAction Continue

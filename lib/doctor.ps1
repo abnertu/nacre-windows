@@ -168,8 +168,9 @@ function Invoke-NwDoctor {
         }
     }
 
-    Invoke-NwNative -Command 'winget' -Arguments (Get-NwWinGetTestArguments -Document (Join-Path $build.Path 'configuration.winget') -Yes:$Yes) -AllowFailure
-    if ($script:NwExitCode -ne 0) { $issues += "WinGet reports package drift (exit $($script:NwExitCode))." }
+    $drift = Get-NwPackageDrift $build.Config
+    if ($drift.Failure) { $issues += "Package check failed: $($drift.Failure)" }
+    foreach ($line in $drift.Lines) { $issues += "Package drift: $line" }
 
     if (Test-NwCommand 'chezmoi') {
         $status = @(& chezmoi @(@('status') + (Get-NwChezmoiArguments $build.Path)) 2>&1)

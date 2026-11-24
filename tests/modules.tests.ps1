@@ -83,7 +83,7 @@ function Get-ModuleFixtureEnvironment {
     param([string]$Root)
     $temporary = Join-Path $Root 'temp'
     New-NwDirectory $temporary
-    return @{ NACRE_WINDOWS_GALLERY = (Join-Path $Root 'gallery'); TEMP = $temporary; TMP = $temporary }
+    return @{ NACRE_WINDOWS_GALLERY = (Join-Path $Root 'gallery'); TEMP = $temporary; TMP = $temporary; NW_FAKE_WINGET_EXPORT = (New-TestInstalledExport $Root) }
 }
 
 function Invoke-TestModuleSwitch {

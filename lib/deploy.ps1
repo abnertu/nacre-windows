@@ -127,13 +127,14 @@ function Invoke-NwPlan {
     param([string]$CoreRoot, [string]$MachineRoot, [switch]$Yes)
     $build = Invoke-NwBuild -CoreRoot $CoreRoot -MachineRoot $MachineRoot
     Write-Host "Artifact $($build.Id): $($build.Path)"
-    $document = Join-Path $build.Path 'configuration.winget'
-    Invoke-NwNative -Command 'winget' -Arguments @('configure', 'show', '-f', $document)
-    # A drift test can install the WinGet DSC processor on first use.
-    Invoke-NwNative -Command 'winget' -Arguments (Get-NwWinGetTestArguments -Document $document -Yes:$Yes) -AllowFailure
+    $drift = Get-NwPackageDrift $build.Config
 
-    if ($script:NwExitCode -ne 0) {
-        Write-Warning "WinGet reports drift or a failed test (exit $($script:NwExitCode))."
+    if ($drift.Failure) {
+        Write-Warning "Package check skipped: $($drift.Failure)"
+    } elseif ($drift.Lines.Count -eq 0) {
+        Write-Host 'Packages: each declared package is installed.'
+    } else {
+        foreach ($line in $drift.Lines) { Write-Host $line }
     }
 
     $configHome = Get-NwConfigHomeState $build.Config

@@ -147,7 +147,7 @@ Test 'install upgrades an existing machine' {
             Assert-True ($lock.Core.Rev -eq $case.Rev) "install pinned $($lock.Core.Rev), expected $($case.Rev). Output:`n$($result.Output)"
             if ($case.Ref) { Assert-True ($lock.Core.Ref -eq $case.Ref) 'install changed the channel.' }
             if ($case.ContainsKey('Repo')) { Assert-ErrorMatch $result.Output 'not NACRE_REPO' }
-            Assert-Match $result.Log 'winget configure test'
+            Assert-Match $result.Log 'winget export -o'
 
             if ($yes) {
                 Assert-Match $result.Log 'winget configure -f'

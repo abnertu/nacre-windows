@@ -65,7 +65,7 @@ function Read-UpgradeLockBytes {
 
 function Assert-Deployed {
     param($Result, [switch]$WithoutSwitch)
-    Assert-Match $Result.Log 'winget configure test -f .*configuration\.winget --accept-configuration-agreements'
+    Assert-Match $Result.Log 'winget export -o'
 
     if ($WithoutSwitch) {
         Assert-NoMatch $Result.Log 'winget configure -f'

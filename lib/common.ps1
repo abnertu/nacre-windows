@@ -220,13 +220,48 @@ function Invoke-NwNative {
     }
 }
 
-# WinGet asks for the configuration agreement before each configure run,
-# also before a test. -Yes gives that consent for runs without a console.
-function Get-NwWinGetTestArguments {
-    param([string]$Document, [switch]$Yes)
-    $arguments = @('configure', 'test', '-f', $Document)
-    if ($Yes) { $arguments += '--accept-configuration-agreements' }
-    return , $arguments
+# One `winget export` lists the installed packages that WinGet matches to a
+# source. A DSC test starts one process per package and is much slower.
+# Return the drift lines of the enabled packages, or a Failure message.
+function Get-NwPackageDrift {
+    param([System.Collections.IDictionary]$Config)
+    $file = Join-Path ([IO.Path]::GetTempPath()) ('nacre-windows-export-' + [guid]::NewGuid().ToString('N') + '.json')
+
+    try {
+        & winget export -o $file --include-versions --accept-source-agreements --disable-interactivity *> $null
+        $code = $LASTEXITCODE
+        if (-not (Test-Path -LiteralPath $file)) { return @{ Lines = @(); Failure = "winget export failed with exit code $code." } }
+        $export = Read-NwJson $file
+        $installed = @{}
+
+        foreach ($source in @($export['Sources'])) {
+            $name = [string]$source['SourceDetails']['Name']
+
+            foreach ($package in @($source['Packages'])) {
+                $installed[("$name|" + $package['PackageIdentifier']).ToLowerInvariant()] = [string]$package['Version']
+            }
+        }
+
+        $lines = @()
+
+        foreach ($id in (Get-NwSortedKeys $Config['Packages'])) {
+            $package = $Config['Packages'][$id]
+            if (-not $package['Enable']) { continue }
+            $source = 'winget'
+            if ($package.ContainsKey('Source')) { $source = $package['Source'] }
+            $key = "$source|$id".ToLowerInvariant()
+
+            if (-not $installed.ContainsKey($key)) {
+                $lines += "+ package $id (missing or not matched by WinGet; switch installs it)"
+            } elseif ($package.ContainsKey('Version') -and $package['Version'] -and $installed[$key] -ne $package['Version']) {
+                $lines += "~ package $id $($installed[$key]), declared $($package['Version'])"
+            }
+        }
+
+        return @{ Lines = $lines; Failure = $null }
+    } finally {
+        Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    }
 }
 
 function Test-NwCommand {

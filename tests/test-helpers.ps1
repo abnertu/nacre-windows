@@ -58,7 +58,8 @@ function New-TestRoot {
     }
 
     # Fake native commands log their arguments. An exit code comes from
-    # NW_FAKE_<COMMAND>_EXIT, or NW_FAKE_WINGET_TEST_EXIT for 'configure test'.
+    # NW_FAKE_<COMMAND>_EXIT. 'winget export' writes NW_FAKE_WINGET_EXPORT, or
+    # an export without packages.
     $winget = @(
         '@echo off'
         'if not "%1"=="--version" goto run'
@@ -66,7 +67,10 @@ function New-TestRoot {
         'exit /b 0'
         ':run'
         'echo winget %*>>"%NW_FAKE_LOG%"'
-        'if "%2"=="test" if defined NW_FAKE_WINGET_TEST_EXIT exit /b %NW_FAKE_WINGET_TEST_EXIT%'
+        'if not "%1"=="export" goto configure'
+        'if defined NW_FAKE_WINGET_EXPORT (copy /y "%NW_FAKE_WINGET_EXPORT%" "%3" >nul) else (echo {"Sources":[]}>"%3")'
+        'exit /b 0'
+        ':configure'
         'if defined NW_FAKE_WINGET_EXIT exit /b %NW_FAKE_WINGET_EXIT%'
         'exit /b 0'
     )
@@ -334,4 +338,28 @@ function New-TestCoreArchive {
         Bytes  = [IO.File]::ReadAllBytes($archive)
         Sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
     }
+}
+
+# A winget export file in which every declared package is installed.
+function New-TestInstalledExport {
+    param([string]$Root)
+    . (Join-Path $script:CoreRoot 'lib\common.ps1')
+    . (Join-Path $script:CoreRoot 'lib\configuration.ps1')
+    $config = Resolve-NwConfiguration -CoreRoot $script:CoreRoot -MachineRoot (Join-Path $Root 'machine')
+    $sources = @{}
+
+    foreach ($id in $config['Packages'].Keys) {
+        $package = $config['Packages'][$id]
+        $source = 'winget'
+        if ($package.ContainsKey('Source')) { $source = $package['Source'] }
+        $version = '1.0'
+        if ($package.ContainsKey('Version') -and $package['Version']) { $version = $package['Version'] }
+        if (-not $sources.ContainsKey($source)) { $sources[$source] = @() }
+        $sources[$source] += @{ PackageIdentifier = $id; Version = $version }
+    }
+
+    $document = @{ Sources = @($sources.Keys | ForEach-Object { @{ SourceDetails = @{ Name = $_ }; Packages = $sources[$_] } }) }
+    $path = Join-Path $Root 'installed-export.json'
+    [IO.File]::WriteAllText($path, (ConvertTo-Json -InputObject $document -Depth 6))
+    return $path
 }
